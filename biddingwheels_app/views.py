@@ -57,3 +57,23 @@ def admin_reports(request):
     else:
         return HttpResponse(status=404)
 
+
+def website_stats(request):
+    class Stats:
+        def __init__(self, dates, sales):
+            self.dates = dates
+            self.sales = sales
+
+        def serialize(self):
+            return{
+                "dates": self.dates,
+                "sales": self.sales,
+            }
+
+    stat = Stats(["Mar-01", "Mar-02", "Mar-03", "Mar-04", "Mar-05"],
+                 [34, 60, 23, 55, 69])
+    stat_json = json.dumps(stat.serialize())
+    if stat_json:
+        return HttpResponse(stat_json)
+    else:
+        return HttpResponse(status=404)
