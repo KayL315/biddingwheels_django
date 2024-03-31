@@ -20,5 +20,6 @@ from biddingwheels_app import views
 
 urlpatterns = [
     path('', views.server_start),
-    path('reported-items', views.admin_reports)
+    path('reported-items', views.admin_reports),
+    path('website-stats', views.website_stats),
 ]
