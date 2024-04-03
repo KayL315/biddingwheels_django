@@ -96,7 +96,7 @@ if os.getenv('GAE_APPLICATION', None):
         'default': {
             'ENGINE': 'django.db.backends.mysql',
             'HOST': os.getenv("CLOUD_HOST"),
-            'USER': os.getenv("USER"),
+            'USER': os.getenv("DB_USER"),
             'PASSWORD': os.getenv("PASSWORD"),
             'NAME': os.getenv("NAME"),
         }
@@ -106,7 +106,7 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.mysql',
             'NAME': os.getenv("NAME"),
-            'USER': os.getenv("USER"),
+            'USER': os.getenv("DB_USER"),
             'PASSWORD': os.getenv("PASSWORD"),
             'HOST': os.getenv("HOST_IP"),
             'PORT': os.getenv("PORT")
