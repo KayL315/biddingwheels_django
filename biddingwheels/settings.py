@@ -86,12 +86,32 @@ WSGI_APPLICATION = 'biddingwheels.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+import pymysql  # noqa: 402
+
+pymysql.version_info = (1, 4, 6, 'final', 0)  # change mysqlclient version
+pymysql.install_as_MySQLdb()
+# [START db_setup]
+if os.getenv('GAE_APPLICATION', None):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'HOST': '/cloudsql/db-group15:us-west1:db-group15',
+            'USER': 'root',
+            'PASSWORD': 'group15',
+            'NAME': 'biddingwheels',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'biddingwheels',
+            'USER': 'root',
+            'PASSWORD': 'group15',
+            'HOST': '34.168.183.184',
+            'PORT': '3306'
+        }
+    }
 
 
 # Password validation
