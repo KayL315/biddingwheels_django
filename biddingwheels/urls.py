@@ -22,4 +22,5 @@ urlpatterns = [
     path('', views.server_start),
     path('reported-items', views.admin_reports),
     path('website-stats', views.website_stats),
+    path('car-details/<int:listid>/', views.detail_page)
 ]
