@@ -95,21 +95,21 @@ if os.getenv('GAE_APPLICATION', None):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'HOST': '/cloudsql/db-group15:us-west1:db-group15',
-            'USER': 'root',
-            'PASSWORD': 'group15',
-            'NAME': 'biddingwheels',
+            'HOST': os.getenv("CLOUD_HOST"),
+            'USER': os.getenv("USER"),
+            'PASSWORD': os.getenv("PASSWORD"),
+            'NAME': os.getenv("NAME"),
         }
     }
 else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'biddingwheels',
-            'USER': 'root',
-            'PASSWORD': 'group15',
-            'HOST': '34.168.183.184',
-            'PORT': '3306'
+            'NAME': os.getenv("NAME"),
+            'USER': os.getenv("USER"),
+            'PASSWORD': os.getenv("PASSWORD"),
+            'HOST': os.getenv("HOST_IP"),
+            'PORT': os.getenv("PORT")
         }
     }
 
