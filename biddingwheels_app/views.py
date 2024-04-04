@@ -17,27 +17,28 @@ def server_start(request):
 
 
 def admin_reports(request):
-    cursor = connection.cursor()
-    cursor.execute('''
-        SELECT 
-            c.listid as Listing_id, c.image, c.make as Make, c.model as Model, 
-            u.username as Seller, u.user_id as SellerId, 
-            with_listid.description, with_listid.Reporter, with_listid.Reporter_id
-        FROM
-            CarListing c
-            INNER JOIN (
-                SELECT 
-                    r.listing_id as Lister, r.description, 
-                    u.username as Reporter, r.reporter_id as Reporter_id
-                FROM 
-                    biddingwheels.ListingReport r
-                    INNER JOIN User u ON u.user_id = r.reporter_id
-            ) as with_listid ON c.listid = with_listid.Lister
-            INNER JOIN User u ON u.user_id = c.sellerid
-    ''')
-    rows = cursor.fetchall()
+    try:
+        cursor = connection.cursor()
+        cursor.execute('''
+            SELECT 
+                c.listid as Listing_id, c.image, c.make as Make, c.model as Model, 
+                u.username as Seller, u.user_id as SellerId, 
+                with_listid.description, with_listid.Reporter, with_listid.Reporter_id
+            FROM
+                CarListing c
+                INNER JOIN (
+                    SELECT 
+                        r.listing_id as Lister, r.description, 
+                        u.username as Reporter, r.reporter_id as Reporter_id
+                    FROM 
+                        biddingwheels.ListingReport r
+                        INNER JOIN User u ON u.user_id = r.reporter_id
+                ) as with_listid ON c.listid = with_listid.Lister
+                INNER JOIN User u ON u.user_id = c.sellerid
+        ''')
+        rows = cursor.fetchall()
 
-    if rows:
+
         data = [
             {
                 'ListId': row[0],
@@ -53,8 +54,10 @@ def admin_reports(request):
             for row in rows
         ]
         return JsonResponse(data, safe=False)
-    else:
+
+    except Exception:
         return HttpResponse(status=404)
+
 
 
 def website_stats(request):
