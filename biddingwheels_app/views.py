@@ -1,9 +1,10 @@
+import datetime
 import json
 import os
 import dotenv
 from django.db import connection
 from django.shortcuts import render
-from django.http import JsonResponse, HttpResponse
+from django.http import HttpResponseBadRequest, JsonResponse, HttpResponse
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -125,3 +126,29 @@ def detail_page(request, listid):
             return HttpResponse(status=404)
     finally:
         cursor.close()
+
+
+def post_report(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            reporter_id = int (data['reporter_id'])
+            description = data['description']
+            listing_id = int (data['listing_id'])
+            submit_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Ensure this is in a safe format
+
+            with connection.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO ListingReport (reporter_id, description, listing_id, submit_time) 
+                    VALUES (%s, %s, %s, %s)
+                ''', [reporter_id, description, listing_id, submit_time])
+            
+            return JsonResponse({'message': 'Report submitted successfully'})
+
+        except KeyError as e:
+            return HttpResponseBadRequest(f'Missing field: {e}')
+        except Exception as e:
+            return HttpResponseBadRequest(f'An error occurred: {e}')
+
+    return HttpResponseBadRequest('Invalid request method')
+
