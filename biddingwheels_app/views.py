@@ -4,13 +4,8 @@ import os
 import dotenv
 from .models import User
 from django.db import connection
-<<<<<<< HEAD
-from django.shortcuts import render
 from django.http import HttpResponseBadRequest, JsonResponse, HttpResponse
-=======
 from django.shortcuts import render, HttpResponse, redirect
-from django.http import JsonResponse, HttpResponse
->>>>>>> profile
 from dotenv import load_dotenv
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import check_password
@@ -234,6 +229,8 @@ def login(request):
         # 假设验证成功，创建 session 并返回成功消息
         request.session['user_id'] = user.user_id
         request.session['user_role'] = user.role
+        print(request.session['user_role'])
+        print(request.session['user_id'])
         response = JsonResponse({'message': 'Login successful'})
         response['Access-Control-Allow-Origin'] = 'http://localhost:3000'
         response['Access-Control-Allow-Credentials'] = True
@@ -246,16 +243,36 @@ def login(request):
 
 
 # 检查用户是否登录
-def check_session(request):
-    user_id = request.session.get('user_id')
-    user_role = request.session.get('user_role')
 
-    if user_id and user_role:
-        # 如果会话中存在用户ID和角色，表示会话有效
-        return JsonResponse({'message': 'Session is valid'})
+def check_session(request):
+    if 'user_id' in request.session and 'user_role' in request.session:
+        # 用户已登录，返回用户信息
+        user_id = request.session['user_id']
+        user_role = request.session['user_role']
+        return JsonResponse({'user_id': user_id, 'user_role': user_role})
     else:
-        # 如果会话中缺少用户ID或角色，表示会话无效
-        return JsonResponse({'error': 'Session is invalid'}, status=401)
+        # 用户未登录，返回401状态码
+        return JsonResponse({'error': 'Not logged in'}, status=401)
+
+
+    
+# def check_session(request):
+#     if request.method == 'OPTIONS':
+#         response = JsonResponse({'message': 'Preflight request handled successfully'})
+#         response['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+#         response['Access-Control-Allow-Credentials'] = True
+#         response['Access-Control-Allow-Headers'] = 'Content-Type'
+#         response['Access-Control-Allow-Methods'] = 'GET'
+#         return response
+
+#     user_id = request.session.get('user_id')
+#     user_role = request.session.get('user_role')
+
+#     if user_id and user_role:
+#         return JsonResponse({'message': 'Session is valid'})
+#     else:
+#         return JsonResponse({'error': 'Session is invalid'}, status=401)
+
 # def check_session(request):
 #     if request.user.is_authenticated:
 #         return JsonResponse({'message': 'User is authenticated'})
