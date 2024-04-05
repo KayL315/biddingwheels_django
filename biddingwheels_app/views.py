@@ -140,6 +140,39 @@ def detail_page(request, listid):
         cursor.close()
 
 @csrf_exempt
+def submit_bid(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            bid = float(data.get("bid"))
+            listing_id = data.get("listing_id")
+
+            with connection.cursor() as cursor:
+                # Fetch the current highest bid
+                cursor.execute('SELECT highestBid FROM CarListing WHERE listid = %s', [listing_id])
+                row = cursor.fetchone()
+                if row:
+                    current_highest_bid = row[0]
+                    if bid > current_highest_bid:
+                        # Update the bid
+                        cursor.execute('UPDATE CarListing SET highestBid = %s WHERE listid = %s', [bid, listing_id])
+                        return JsonResponse({"success": True, "message": "Bid placed successfully"})
+                    else:
+                        return JsonResponse({"success": False, "message": "Bid must be higher than the current highest bid"}, status=400)
+                else:
+                    return JsonResponse({"success": False, "message": "Car listing not found"}, status=404)
+
+        except KeyError:
+            return JsonResponse({"success": False, "message": "Missing required data"}, status=400)
+        except ValueError:
+            return JsonResponse({"success": False, "message": "Invalid bid value"}, status=400)
+        except Exception as e:
+            return JsonResponse({"success": False, "message": f"An unexpected error occurred: {e}"}, status=500)
+    else:
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+
+@csrf_exempt
 def post_report(request):
     if request.method != 'POST':
         return HttpResponseBadRequest('Invalid request method')
