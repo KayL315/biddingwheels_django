@@ -142,6 +142,49 @@ def detail_page(request, listid):
         cursor.close()
 
 @csrf_exempt
+def post_listing(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            
+            values = (
+                data.get('sellerID', 1),  # Default value set to 1
+                data.get('licenseNumber', ''),
+                data.get('engineSerialNumber', ''),
+                data.get('make', ''),
+                data.get('model', ''),
+                data.get('year', 0),
+                data.get('mileage', 0),
+                data.get('city', ''),
+                data.get('color', ''),
+                data.get('additionalFeatures', ''),
+                data.get('description', ''),
+                data.get('startingPrice', 0),
+                data.get('biddingDeadline', ''),
+                -1,  # Assuming -1 is the default value for highestBid and highestBidHolder
+                1,  # Assuming 1 is the default value for highestBidHolder
+                data.get('image', '')
+            )
+
+            # Execute the SQL query.
+            with connection.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO CarListing
+                    (sellerID, licenseNumber, engineSerialNumber, make, model, year, mileage, city, color, additionalFeatures, description, startingPrice, biddingDeadline, highestBid, highestBidHolder, image)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, STR_TO_DATE(%s, '%%Y-%%m-%%dT%%H:%%i:%%sZ'), %s, %s, %s)
+                ''', values)
+
+            return JsonResponse({'status': 'success', 'message': 'Listing created successfully'})
+
+        except Exception as e:
+            # Handle other exceptions
+            return JsonResponse({'status': 'error', 'message': 'An error occurred: ' + str(e)})
+    else:
+        # If the method is not POST, return an error
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
+
+
+@csrf_exempt
 def submit_bid(request):
     if not request.method == "POST":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
