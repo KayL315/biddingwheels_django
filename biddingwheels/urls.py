@@ -24,7 +24,7 @@ urlpatterns = [
     path('reported-items', views.admin_reports),
     path('website-stats', views.website_stats),
     path('car-details/<int:listid>/', views.detail_page),
-    path('post-report', views.post_report)
+    path('post-report', views.post_report),
     path('signup', views.signup),
     path('login', views.login),
     path('check_session', views.check_session),
