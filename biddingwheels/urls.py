@@ -30,6 +30,9 @@ urlpatterns = [
     path('check_session', views.check_session),
     path('profile', views.profile),
     path('submit-bid', views.submit_bid),
+    path('all-listings', views.all_listings),
+    path('payment', views.payment),
+    path('transactions', views.fetch_transactions),
     path('post-listing', views.post_listing),
     path('logout', views.logout_view),
 
