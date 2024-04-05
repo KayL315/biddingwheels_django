@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import dotenv
+from pymysql import DatabaseError, IntegrityError
 from .models import User
 from django.db import connection
 from django.http import HttpResponseBadRequest, JsonResponse, HttpResponse
@@ -9,6 +10,7 @@ from django.shortcuts import render, HttpResponse, redirect
 from dotenv import load_dotenv
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import check_password
+from datetime import datetime
 
 import logging
 
@@ -100,10 +102,11 @@ def detail_page(request, listid):
                 cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
                 cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
                 cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
-                cl.highestBidHolder, u.username, cl.image
+                cl.highestBidHolder, u.username, b.username AS highestBidHolderUsername, cl.image
             FROM 
                 CarListing cl
                 JOIN User u ON cl.sellerID = u.user_id
+                LEFT JOIN User b ON cl.highestBidHolder = b.user_id
             WHERE 
                 cl.listid = %s
         ''', [listid])
@@ -128,7 +131,8 @@ def detail_page(request, listid):
                 'highestBid': row[13],
                 'highestBidHolder': row[14],
                 'sellerUsername': row[15],
-                'image': row[16]
+                'highestBidHolderUsername': row[16] if row[16] else 'No highest bid holder',
+                'image': row[17]
             }
 
             return JsonResponse(car_data)
@@ -137,30 +141,123 @@ def detail_page(request, listid):
     finally:
         cursor.close()
 
-
-def post_report(request):
+@csrf_exempt
+def post_listing(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            reporter_id = int (data['reporter_id'])
+            
+            values = (
+                data.get('sellerID', 1),  # Default value set to 1
+                data.get('licenseNumber', ''),
+                data.get('engineSerialNumber', ''),
+                data.get('make', ''),
+                data.get('model', ''),
+                data.get('year', 0),
+                data.get('mileage', 0),
+                data.get('city', ''),
+                data.get('color', ''),
+                data.get('additionalFeatures', ''),
+                data.get('description', ''),
+                data.get('startingPrice', 0),
+                data.get('biddingDeadline', ''),
+                -1,  # Assuming -1 is the default value for highestBid and highestBidHolder
+                1,  # Assuming 1 is the default value for highestBidHolder
+                data.get('image', '')
+            )
+
+            # Execute the SQL query.
+            with connection.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO CarListing
+                    (sellerID, licenseNumber, engineSerialNumber, make, model, year, mileage, city, color, additionalFeatures, description, startingPrice, biddingDeadline, highestBid, highestBidHolder, image)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, STR_TO_DATE(%s, '%%Y-%%m-%%dT%%H:%%i:%%sZ'), %s, %s, %s)
+                ''', values)
+
+            return JsonResponse({'status': 'success', 'message': 'Listing created successfully'})
+
+        except Exception as e:
+            # Handle other exceptions
+            return JsonResponse({'status': 'error', 'message': 'An error occurred: ' + str(e)})
+    else:
+        # If the method is not POST, return an error
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
+
+
+@csrf_exempt
+def submit_bid(request):
+    if not request.method == "POST":
+        return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    if not request.session.get('user_id'):
+        return JsonResponse({"success": False, "message": "User not logged in"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        bid = float(data.get("bid"))
+        listing_id = data.get("listing_id")
+        user_id = request.session.get('user_id') 
+
+        with connection.cursor() as cursor:
+            # Fetch the current highest bid
+            cursor.execute('SELECT highestBid FROM CarListing WHERE listid = %s', [listing_id])
+            row = cursor.fetchone()
+            if row:
+                current_highest_bid = row[0]
+                if bid > current_highest_bid:
+                    # Update the bid
+                    cursor.execute('UPDATE CarListing SET highestBid = %s, highestBidHolder = %s WHERE listid = %s', 
+                               [bid, user_id, listing_id])
+                    return JsonResponse({"success": True, "message": "Bid placed successfully"})
+                else:
+                    return JsonResponse({"success": False, "message": "Bid must be higher than the current highest bid"}, status=400)
+            else:
+                return JsonResponse({"success": False, "message": "Car listing not found"}, status=404)
+
+    except KeyError:
+        return JsonResponse({"success": False, "message": "Missing required data"}, status=400)
+    except ValueError:
+        return JsonResponse({"success": False, "message": "Invalid bid value"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": f"An unexpected error occurred: {e}"}, status=500)
+
+
+@csrf_exempt
+def post_report(request):
+    if request.method != 'POST':
+        return HttpResponseBadRequest('Invalid request method')
+    if request.method == 'POST':
+        if not request.session.get('user_id'):
+            return JsonResponse({"error": "User not logged in"}, status=401)
+        
+        try:
+            data = json.loads(request.body)
+            reporter_id = request.session.get('user_id')
             description = data['description']
             listing_id = int (data['listing_id'])
-            submit_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Ensure this is in a safe format
+            submit_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # submit_time = datetime.now()
 
             with connection.cursor() as cursor:
                 cursor.execute('''
-                    INSERT INTO ListingReport (reporter_id, description, listing_id, submit_time) 
+                    INSERT INTO ListingReport (reporter_id, submit_time, description, listing_id) 
                     VALUES (%s, %s, %s, %s)
-                ''', [reporter_id, description, listing_id, submit_time])
+                ''', [reporter_id, submit_time, description, listing_id])
             
             return JsonResponse({'message': 'Report submitted successfully'})
 
         except KeyError as e:
             return HttpResponseBadRequest(f'Missing field: {e}')
+        except ValueError as e:
+            # This will catch issues like conversion errors
+            return HttpResponseBadRequest(f'Invalid data: {e}')
+        except DatabaseError as e:
+            # Specific handling for database errors
+            return HttpResponseBadRequest(f'Database error: {e}')
         except Exception as e:
-            return HttpResponseBadRequest(f'An error occurred: {e}')
-
-    return HttpResponseBadRequest('Invalid request method')
+            # Catch-all for any other exceptions
+            return HttpResponseBadRequest(f'An unexpected error occurred: {e}')
 
 # 用户注册
 @csrf_exempt  # 禁用 CSRF 防护，以便前端可以发送 POST 请求
