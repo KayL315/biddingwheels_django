@@ -102,10 +102,11 @@ def detail_page(request, listid):
                 cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
                 cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
                 cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
-                cl.highestBidHolder, u.username, cl.image
+                cl.highestBidHolder, u.username, b.username AS highestBidHolderUsername, cl.image
             FROM 
                 CarListing cl
                 JOIN User u ON cl.sellerID = u.user_id
+                LEFT JOIN User b ON cl.highestBidHolder = b.user_id
             WHERE 
                 cl.listid = %s
         ''', [listid])
@@ -130,7 +131,8 @@ def detail_page(request, listid):
                 'highestBid': row[13],
                 'highestBidHolder': row[14],
                 'sellerUsername': row[15],
-                'image': row[16]
+                'highestBidHolderUsername': row[16] if row[16] else 'No highest bid holder',
+                'image': row[17]
             }
 
             return JsonResponse(car_data)
@@ -141,35 +143,40 @@ def detail_page(request, listid):
 
 @csrf_exempt
 def submit_bid(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            bid = float(data.get("bid"))
-            listing_id = data.get("listing_id")
-
-            with connection.cursor() as cursor:
-                # Fetch the current highest bid
-                cursor.execute('SELECT highestBid FROM CarListing WHERE listid = %s', [listing_id])
-                row = cursor.fetchone()
-                if row:
-                    current_highest_bid = row[0]
-                    if bid > current_highest_bid:
-                        # Update the bid
-                        cursor.execute('UPDATE CarListing SET highestBid = %s WHERE listid = %s', [bid, listing_id])
-                        return JsonResponse({"success": True, "message": "Bid placed successfully"})
-                    else:
-                        return JsonResponse({"success": False, "message": "Bid must be higher than the current highest bid"}, status=400)
-                else:
-                    return JsonResponse({"success": False, "message": "Car listing not found"}, status=404)
-
-        except KeyError:
-            return JsonResponse({"success": False, "message": "Missing required data"}, status=400)
-        except ValueError:
-            return JsonResponse({"success": False, "message": "Invalid bid value"}, status=400)
-        except Exception as e:
-            return JsonResponse({"success": False, "message": f"An unexpected error occurred: {e}"}, status=500)
-    else:
+    if not request.method == "POST":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    if not request.session.get('user_id'):
+        return JsonResponse({"success": False, "message": "User not logged in"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        bid = float(data.get("bid"))
+        listing_id = data.get("listing_id")
+        user_id = request.session.get('user_id') 
+
+        with connection.cursor() as cursor:
+            # Fetch the current highest bid
+            cursor.execute('SELECT highestBid FROM CarListing WHERE listid = %s', [listing_id])
+            row = cursor.fetchone()
+            if row:
+                current_highest_bid = row[0]
+                if bid > current_highest_bid:
+                    # Update the bid
+                    cursor.execute('UPDATE CarListing SET highestBid = %s, highestBidHolder = %s WHERE listid = %s', 
+                               [bid, user_id, listing_id])
+                    return JsonResponse({"success": True, "message": "Bid placed successfully"})
+                else:
+                    return JsonResponse({"success": False, "message": "Bid must be higher than the current highest bid"}, status=400)
+            else:
+                return JsonResponse({"success": False, "message": "Car listing not found"}, status=404)
+
+    except KeyError:
+        return JsonResponse({"success": False, "message": "Missing required data"}, status=400)
+    except ValueError:
+        return JsonResponse({"success": False, "message": "Invalid bid value"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": f"An unexpected error occurred: {e}"}, status=500)
 
 
 @csrf_exempt
@@ -177,9 +184,12 @@ def post_report(request):
     if request.method != 'POST':
         return HttpResponseBadRequest('Invalid request method')
     if request.method == 'POST':
+        if not request.session.get('user_id'):
+            return JsonResponse({"error": "User not logged in"}, status=401)
+        
         try:
             data = json.loads(request.body)
-            reporter_id = int (data['reporter_id'])
+            reporter_id = request.session.get('user_id')
             description = data['description']
             listing_id = int (data['listing_id'])
             submit_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -193,7 +203,6 @@ def post_report(request):
                 ''', [reporter_id, submit_time, description, listing_id])
             
             return JsonResponse({'message': 'Report submitted successfully'})
-
 
         except KeyError as e:
             return HttpResponseBadRequest(f'Missing field: {e}')
