@@ -5,8 +5,8 @@ import dotenv
 from pymysql import DatabaseError, IntegrityError
 from .models import User
 from django.db import connection
-from django.shortcuts import render, HttpResponse, redirect
 from django.http import HttpResponseBadRequest, JsonResponse, HttpResponse
+from django.shortcuts import render, HttpResponse, redirect
 from dotenv import load_dotenv
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import check_password
@@ -140,10 +140,11 @@ def detail_page(request, listid):
                 cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
                 cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
                 cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
-                cl.highestBidHolder, u.username, cl.image
+                cl.highestBidHolder, u.username, b.username AS highestBidHolderUsername, cl.image
             FROM 
                 CarListing cl
                 JOIN User u ON cl.sellerID = u.user_id
+                LEFT JOIN User b ON cl.highestBidHolder = b.user_id
             WHERE 
                 cl.listid = %s
         ''', [listid])
@@ -168,7 +169,8 @@ def detail_page(request, listid):
                 'highestBid': row[13],
                 'highestBidHolder': row[14],
                 'sellerUsername': row[15],
-                'image': row[16]
+                'highestBidHolderUsername': row[16] if row[16] else 'No highest bid holder',
+                'image': row[17]
             }
 
             return JsonResponse(car_data)
@@ -178,36 +180,84 @@ def detail_page(request, listid):
         cursor.close()
 
 @csrf_exempt
-def submit_bid(request):
-    if request.method == "POST":
+def post_listing(request):
+    if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            bid = float(data.get("bid"))
-            listing_id = data.get("listing_id")
+            
+            values = (
+                data.get('sellerID', 1),  # Default value set to 1
+                data.get('licenseNumber', ''),
+                data.get('engineSerialNumber', ''),
+                data.get('make', ''),
+                data.get('model', ''),
+                data.get('year', 0),
+                data.get('mileage', 0),
+                data.get('city', ''),
+                data.get('color', ''),
+                data.get('additionalFeatures', ''),
+                data.get('description', ''),
+                data.get('startingPrice', 0),
+                data.get('biddingDeadline', ''),
+                -1,  # Assuming -1 is the default value for highestBid and highestBidHolder
+                1,  # Assuming 1 is the default value for highestBidHolder
+                data.get('image', '')
+            )
 
+            # Execute the SQL query.
             with connection.cursor() as cursor:
-                # Fetch the current highest bid
-                cursor.execute('SELECT highestBid FROM CarListing WHERE listid = %s', [listing_id])
-                row = cursor.fetchone()
-                if row:
-                    current_highest_bid = row[0]
-                    if bid > current_highest_bid:
-                        # Update the bid
-                        cursor.execute('UPDATE CarListing SET highestBid = %s WHERE listid = %s', [bid, listing_id])
-                        return JsonResponse({"success": True, "message": "Bid placed successfully"})
-                    else:
-                        return JsonResponse({"success": False, "message": "Bid must be higher than the current highest bid"}, status=400)
-                else:
-                    return JsonResponse({"success": False, "message": "Car listing not found"}, status=404)
+                cursor.execute('''
+                    INSERT INTO CarListing
+                    (sellerID, licenseNumber, engineSerialNumber, make, model, year, mileage, city, color, additionalFeatures, description, startingPrice, biddingDeadline, highestBid, highestBidHolder, image)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, STR_TO_DATE(%s, '%%Y-%%m-%%dT%%H:%%i:%%sZ'), %s, %s, %s)
+                ''', values)
 
-        except KeyError:
-            return JsonResponse({"success": False, "message": "Missing required data"}, status=400)
-        except ValueError:
-            return JsonResponse({"success": False, "message": "Invalid bid value"}, status=400)
+            return JsonResponse({'status': 'success', 'message': 'Listing created successfully'})
+
         except Exception as e:
-            return JsonResponse({"success": False, "message": f"An unexpected error occurred: {e}"}, status=500)
+            # Handle other exceptions
+            return JsonResponse({'status': 'error', 'message': 'An error occurred: ' + str(e)})
     else:
+        # If the method is not POST, return an error
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
+
+
+@csrf_exempt
+def submit_bid(request):
+    if not request.method == "POST":
         return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+    if not request.session.get('user_id'):
+        return JsonResponse({"success": False, "message": "User not logged in"}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        bid = float(data.get("bid"))
+        listing_id = data.get("listing_id")
+        user_id = request.session.get('user_id') 
+
+        with connection.cursor() as cursor:
+            # Fetch the current highest bid
+            cursor.execute('SELECT highestBid FROM CarListing WHERE listid = %s', [listing_id])
+            row = cursor.fetchone()
+            if row:
+                current_highest_bid = row[0]
+                if bid > current_highest_bid:
+                    # Update the bid
+                    cursor.execute('UPDATE CarListing SET highestBid = %s, highestBidHolder = %s WHERE listid = %s', 
+                               [bid, user_id, listing_id])
+                    return JsonResponse({"success": True, "message": "Bid placed successfully"})
+                else:
+                    return JsonResponse({"success": False, "message": "Bid must be higher than the current highest bid"}, status=400)
+            else:
+                return JsonResponse({"success": False, "message": "Car listing not found"}, status=404)
+
+    except KeyError:
+        return JsonResponse({"success": False, "message": "Missing required data"}, status=400)
+    except ValueError:
+        return JsonResponse({"success": False, "message": "Invalid bid value"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": f"An unexpected error occurred: {e}"}, status=500)
 
 
 @csrf_exempt
@@ -215,9 +265,12 @@ def post_report(request):
     if request.method != 'POST':
         return HttpResponseBadRequest('Invalid request method')
     if request.method == 'POST':
+        if not request.session.get('user_id'):
+            return JsonResponse({"error": "User not logged in"}, status=401)
+        
         try:
             data = json.loads(request.body)
-            reporter_id = int (data['reporter_id'])
+            reporter_id = request.session.get('user_id')
             description = data['description']
             listing_id = int (data['listing_id'])
             submit_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -231,7 +284,6 @@ def post_report(request):
                 ''', [reporter_id, submit_time, description, listing_id])
             
             return JsonResponse({'message': 'Report submitted successfully'})
-
 
         except KeyError as e:
             return HttpResponseBadRequest(f'Missing field: {e}')
@@ -312,6 +364,8 @@ def login(request):
         # 假设验证成功，创建 session 并返回成功消息
         request.session['user_id'] = user.user_id
         request.session['user_role'] = user.role
+        print(request.session['user_role'])
+        print(request.session['user_id'])
         response = JsonResponse({'message': 'Login successful'})
         response['Access-Control-Allow-Origin'] = 'http://localhost:3000'
         response['Access-Control-Allow-Credentials'] = True
@@ -324,16 +378,36 @@ def login(request):
 
 
 # 检查用户是否登录
-def check_session(request):
-    user_id = request.session.get('user_id')
-    user_role = request.session.get('user_role')
 
-    if user_id and user_role:
-        # 如果会话中存在用户ID和角色，表示会话有效
-        return JsonResponse({'message': 'Session is valid'})
+def check_session(request):
+    if 'user_id' in request.session and 'user_role' in request.session:
+        # 用户已登录，返回用户信息
+        user_id = request.session['user_id']
+        user_role = request.session['user_role']
+        return JsonResponse({'user_id': user_id, 'user_role': user_role})
     else:
-        # 如果会话中缺少用户ID或角色，表示会话无效
-        return JsonResponse({'error': 'Session is invalid'}, status=401)
+        # 用户未登录，返回401状态码
+        return JsonResponse({'error': 'Not logged in'}, status=401)
+
+
+    
+# def check_session(request):
+#     if request.method == 'OPTIONS':
+#         response = JsonResponse({'message': 'Preflight request handled successfully'})
+#         response['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+#         response['Access-Control-Allow-Credentials'] = True
+#         response['Access-Control-Allow-Headers'] = 'Content-Type'
+#         response['Access-Control-Allow-Methods'] = 'GET'
+#         return response
+
+#     user_id = request.session.get('user_id')
+#     user_role = request.session.get('user_role')
+
+#     if user_id and user_role:
+#         return JsonResponse({'message': 'Session is valid'})
+#     else:
+#         return JsonResponse({'error': 'Session is invalid'}, status=401)
+
 # def check_session(request):
 #     if request.user.is_authenticated:
 #         return JsonResponse({'message': 'User is authenticated'})
