@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import check_password
 from datetime import datetime
-
+from django.contrib.auth import logout
 import logging
 
 # 配置日志记录器
@@ -74,6 +74,18 @@ def admin_reports(request):
     except Exception:
         return HttpResponse(status=404)
 
+def all_listings(request):
+    cursor = connection.cursor()
+    cursor.execute('''
+        SELECT 
+            cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
+            cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
+            cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
+            cl.highestBidHolder, u.username, cl.image
+        FROM 
+            CarListing cl
+            JOIN User u ON cl.sellerID = u.user_id
+    ''')
 
 def all_listings(request):
     cursor = connection.cursor()
@@ -277,17 +289,24 @@ def submit_bid(request):
                         "UPDATE CarListing SET highestBid = %s, highestBidHolder = %s WHERE listid = %s",
                         [bid, user_id, listing_id],
                     )
-                    return JsonResponse(
-                        {"success": True, "message": "Bid placed successfully"}
+                    # Fetch the username of the highest bid holder
+                    cursor.execute(
+                        "SELECT username FROM user WHERE user_id = %s", [user_id]
                     )
-                else:
-                    return JsonResponse(
-                        {
-                            "success": False,
-                            "message": "Bid must be higher than the current highest bid",
-                        },
-                        status=400,
-                    )
+                    user_row = cursor.fetchone()
+                    if user_row:
+                        highest_bid_holder_username = user_row[0]
+                        return JsonResponse(
+                            {
+                                "success": True,
+                                "message": "Bid placed successfully",
+                                "highestBidHolderUsername": highest_bid_holder_username  # include the username in the response
+                            }
+                        )
+                    else:
+                        return JsonResponse(
+                            {"success": False, "message": "User not found"}, status=404
+                        )
             else:
                 return JsonResponse(
                     {"success": False, "message": "Car listing not found"}, status=404
@@ -438,38 +457,47 @@ def login(request):
 def check_session(request):
     if "user_id" in request.session and "user_role" in request.session:
         # 用户已登录，返回用户信息
-        user_id = request.session["user_id"]
-        user_role = request.session["user_role"]
-        return JsonResponse({"user_id": user_id, "user_role": user_role})
+        user_id = request.session['user_id']
+        user_role = request.session['user_role']
+        print(request.session['user_role']) 
+        return JsonResponse({'user_id': user_id, 'user_role': user_role})
     else:
         # 用户未登录，返回401状态码
-        return JsonResponse({"error": "Not logged in"}, status=401)
+        return JsonResponse({'error': 'Not logged in'}, status=401)
+    
+# payment
+@csrf_exempt
+def payment(request, listid):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        cardName = data.get('cardName')
+        cardNumber = data.get('cardNumber')
+        expMonth = data.get('expMonth')
+        expYear = data.get('expYear')
+        cvv = data.get('cvv')
+        firstName = data.get('firstName')
+        address = data.get('address')
+        city = data.get('city')
+        state = data.get('state')
+        zip = data.get('zip')
+        email = data.get('email')
+        amount = data.get('amount')
+        user_id = data.get('userId')
 
+        # fetch user from session
+        user = User.objects.get(user_id=user_id)
 
-# def check_session(request):
-#     if request.method == 'OPTIONS':
-#         response = JsonResponse({'message': 'Preflight request handled successfully'})
-#         response['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-#         response['Access-Control-Allow-Credentials'] = True
-#         response['Access-Control-Allow-Headers'] = 'Content-Type'
-#         response['Access-Control-Allow-Methods'] = 'GET'
-#         return response
+        if not user:
+            return JsonResponse({'error': 'User is not authenticated'}, status=401)
+        
 
-#     user_id = request.session.get('user_id')
-#     user_role = request.session.get('user_role')
+        
 
-#     if user_id and user_role:
-#         return JsonResponse({'message': 'Session is valid'})
-#     else:
-#         return JsonResponse({'error': 'Session is invalid'}, status=401)
+        # 处理支付逻辑
+        return JsonResponse({'message': f'Payment of ${amount} completed successfully'})
 
-# def check_session(request):
-#     if request.user.is_authenticated:
-#         return JsonResponse({'message': 'User is authenticated'})
-#     else:
-#         return JsonResponse({'error': 'User is not authenticated'}, status=401)
-
-
+    else:
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
 # payment
 @csrf_exempt
 def payment(request):
@@ -651,4 +679,11 @@ def profile(request):
         return JsonResponse({"message": "Profile updated successfully"})
 
     else:
-        return JsonResponse({"error": "Invalid request method"}, status=405)
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+    
+#logout
+def logout_view(request):
+    logout(request)
+    print('Logged out successfully')
+    return JsonResponse({'message': 'Logout successful'})
+

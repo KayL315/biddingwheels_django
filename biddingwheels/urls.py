@@ -38,4 +38,6 @@ urlpatterns = [
     path('check-table-desp/<tablename>', views.check_table),
     path('fetch-table-data/<tablename>', views.fecth_table_data),
     path('add-fake-data', views.add_fake_data),
+    path('logout', views.logout_view),
+
 ]
