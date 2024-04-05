@@ -1,2 +1,5 @@
 # ignores .env file
 .env
+.venv
+__pycache__/
+.DS_Store
