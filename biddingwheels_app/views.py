@@ -74,9 +74,11 @@ def admin_reports(request):
     except Exception:
         return HttpResponse(status=404)
 
+
 def all_listings(request):
     cursor = connection.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT 
             cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
             cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
@@ -85,7 +87,9 @@ def all_listings(request):
         FROM 
             CarListing cl
             JOIN User u ON cl.sellerID = u.user_id
-    ''')
+    """
+    )
+
 
 def all_listings(request):
     cursor = connection.cursor()
@@ -300,7 +304,7 @@ def submit_bid(request):
                             {
                                 "success": True,
                                 "message": "Bid placed successfully",
-                                "highestBidHolderUsername": highest_bid_holder_username  # include the username in the response
+                                "highestBidHolderUsername": highest_bid_holder_username,  # include the username in the response
                             }
                         )
                     else:
@@ -457,47 +461,47 @@ def login(request):
 def check_session(request):
     if "user_id" in request.session and "user_role" in request.session:
         # 用户已登录，返回用户信息
-        user_id = request.session['user_id']
-        user_role = request.session['user_role']
-        print(request.session['user_role']) 
-        return JsonResponse({'user_id': user_id, 'user_role': user_role})
+        user_id = request.session["user_id"]
+        user_role = request.session["user_role"]
+        print(request.session["user_role"])
+        return JsonResponse({"user_id": user_id, "user_role": user_role})
     else:
         # 用户未登录，返回401状态码
-        return JsonResponse({'error': 'Not logged in'}, status=401)
-    
+        return JsonResponse({"error": "Not logged in"}, status=401)
+
+
 # payment
 @csrf_exempt
 def payment(request, listid):
-    if request.method == 'POST':
+    if request.method == "POST":
         data = json.loads(request.body)
-        cardName = data.get('cardName')
-        cardNumber = data.get('cardNumber')
-        expMonth = data.get('expMonth')
-        expYear = data.get('expYear')
-        cvv = data.get('cvv')
-        firstName = data.get('firstName')
-        address = data.get('address')
-        city = data.get('city')
-        state = data.get('state')
-        zip = data.get('zip')
-        email = data.get('email')
-        amount = data.get('amount')
-        user_id = data.get('userId')
+        cardName = data.get("cardName")
+        cardNumber = data.get("cardNumber")
+        expMonth = data.get("expMonth")
+        expYear = data.get("expYear")
+        cvv = data.get("cvv")
+        firstName = data.get("firstName")
+        address = data.get("address")
+        city = data.get("city")
+        state = data.get("state")
+        zip = data.get("zip")
+        email = data.get("email")
+        amount = data.get("amount")
+        user_id = data.get("userId")
 
         # fetch user from session
         user = User.objects.get(user_id=user_id)
 
         if not user:
-            return JsonResponse({'error': 'User is not authenticated'}, status=401)
-        
-
-        
+            return JsonResponse({"error": "User is not authenticated"}, status=401)
 
         # 处理支付逻辑
-        return JsonResponse({'message': f'Payment of ${amount} completed successfully'})
+        return JsonResponse({"message": f"Payment of ${amount} completed successfully"})
 
     else:
-        return JsonResponse({'error': 'Invalid request method'}, status=405)
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
 # payment
 @csrf_exempt
 def payment(request):
@@ -542,68 +546,113 @@ def check_table(request, tablename):
     rows = cursor.fetchall()
     return JsonResponse(rows, safe=False)
 
+
 def fecth_table_data(request, tablename):
     cursor = connection.cursor()
     cursor.execute(f"SELECT * FROM {tablename}")
     rows = cursor.fetchall()
     return JsonResponse(rows, safe=False)
 
+
 def add_fake_data(request):
     # add fake data to the Transactions table
     cursor = connection.cursor()
+
     cursor.execute(
         """
-        INSERT INTO Transactions (owner_id, buyer_id, listid, amount, data, cardName, cardNumber, expMonth, expYear, cvv, firstName, address, city, state, zip, email, licenseNumber, engineSerialNumber, make, model, year, mileage, color, additionalFeatures, description, startingPrice, biddingDeadline, highestBid, highestBidHolder, image)
-        VALUES (1, 2, 1, 5000.00, '2021-03-01', 'John Doe', '123456789', '12', '2023', '123', 'John', '123 Main St', 'New York', 'NY', '10001', 'john.doe@gmail.com', '123456', '123456', 'Toyota', 'Camry', 2018, 50000, 'Red', 'Leather seats, sunroof', 'Great car, low mileage', 4000.00, '2021-03-15 12:00:00', 4500.00, 2, 'https://example.com/car1.jpg'),
-                (2, 3, 2, 8000.00, '2021-03-02', 'Jane Bob', '987654321', '11', '2022', '456', 'Jane', '456 Elm St', 'Los Angeles', 'CA', '90001', 'john.bob@gmail.com', '654321', '654321', 'Honda', 'Accord', 2019, 30000, 'Blue', 'Leather seats, sunroof', 'Great car, low mileage', 7000.00, '2021-03-20 12:00:00', 7500.00, 1, 'https://example.com/car2.jpg'),
-                (3, 4, 1, 10000.00, '2021-03-03', 'John Doe', '123456789', '12', '2023', '123', 'John', '123 Main St', 'New York', 'NY', '10001', 'use2@gmail.com', '123456', '123456', 'Toyota', 'Corolla', 2017, 40000, 'Black', 'Leather seats, sunroof', 'Great car, low mileage', 9000.00, '2021-03-25 12:00:00', 9500.00, 2, 'https://example.com/car3.jpg'),
-                (4, 5, 2, 12000.00, '2021-03-04', 'Jane Bob', '987654321', '11', '2022', '456', 'Jane', '456 Elm St', 'Los Angeles', 'CA', '90001', 'user3@gmail.com', '654321', '654321', 'Toyota', 'RAV4', 2016, 60000, 'White', 'Leather seats, sunroof', 'Great car, low mileage', 11000.00, '2021-03-30 12:00:00', 11500.00, 1, 'https://example.com/car4.jpg'),
-                (5, 6, 1, 15000.00, '2021-03-05', 'John Doe', '123456789', '12', '2023', '123', 'John', '123 Main St', 'New York', 'NY', '10001', 'user4@gmail.com', '123456', '123456', 'Toyota', 'Highlander', 2015, 70000, 'Silver', 'Leather seats, sunroof', 'Great car, low mileage', 14000.00, '2021-04-05 12:00:00', 14500.00, 2, 'https://example.com/car5.jpg')
+            INSERT INTO Payment (user_id, cardName, cardNumber, expMonth, expYear, cvv) 
+            VALUES (1, 'John Doe', '123456789', '12', '2023', '123'),
+                    (2, 'Jane Bob', '987654321', '11', '2022', '456'),
+                    (3, 'John Doe', '123456789', '12', '2023', '123'),
+                    (4, 'Jane Bob', '987654321', '11', '2022', '456'),
+                    (5, 'John Doe', '123456789', '12', '2023', '123')
+        """,
+    )
+
+    cursor.execute(
+        """
+            INSERT INTO Address (user_id, fullName, address, city, state, zip, email) 
+            VALUES  (1, "user1", '123 Main St', 'New York', 'NY', '10001', 'john.doe@gmail.com'),
+                    (2, "user2", '456 Elm St', 'Los Angeles', 'CA', '90001', 'john.bob@gmail.com'),
+                    (3, "user3", '123 Main St', 'New York', 'NY', '10001', 'user3@gmail.com'),
+                    (4, "user4", '456 Elm St', 'Los Angeles', 'CA', '90001', 'user4@gmail.com'),
+                    (5, "user5", '123 Main St', 'New York', 'NY', '10001', 'user4@gmail.com')
+        """,
+    )
+
+    cursor.execute(
+        """
+        INSERT INTO Transactions (owner_id, buyer_id, list_id, amount, data, payment_id, address_id)
+        VALUES  (1, 3, 1, 5000.00, '2021-03-01',  3, 3),
+                (1, 4, 1, 8000.00, '2021-03-02',  4, 4),
+                (1, 5, 1, 10000.00, '2021-03-03', 5, 5),
+                (2, 3, 2, 12000.00, '2021-03-04', 3, 3),
+                (2, 4, 2, 15000.00, '2021-03-05', 4, 4),
+                (2, 5, 2, 16000.00, '2021-03-06', 5, 5)
     """
     )
     return JsonResponse({"message": "Fake data added successfully"}, status=200)
 
 
-def create_transaction_table(request):
+def create_transaction_tables(request):
     cursor = connection.cursor()
+    # # start a transaction
+    # cursor.execute("START TRANSACTION")
     cursor.execute("DROP TABLE IF EXISTS Transactions")
+    cursor.execute("DROP TABLE IF EXISTS Payment")
+    cursor.execute("DROP TABLE IF EXISTS Shipping")
+    cursor.execute("DROP TABLE IF EXISTS Address")
+
+    cursor.execute(
+        """
+        CREATE TABLE Payment (
+            payment_id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT,
+            cardName VARCHAR(255) NOT NULL,
+            cardNumber VARCHAR(255) NOT NULL,
+            expMonth VARCHAR(255) NOT NULL,
+            expYear VARCHAR(255) NOT NULL,
+            cvv VARCHAR(255) NOT NULL,
+
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )
+    """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE Address (
+            address_id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT,
+            fullName VARCHAR(255) NOT NULL,
+            address VARCHAR(255) NOT NULL,
+            city VARCHAR(255) NOT NULL,
+            state VARCHAR(255) NOT NULL,
+            zip VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )
+        """
+    )
+
     cursor.execute(
         """
         CREATE TABLE Transactions (
             transaction_id INT PRIMARY KEY AUTO_INCREMENT,
             owner_id INT,
             buyer_id INT,
-            listid INT,
+            list_id INT,
             amount FLOAT NOT NULL,
             data DATE NOT NULL,
-            cardName VARCHAR(255) NOT NULL,
-            cardNumber VARCHAR(255) NOT NULL,
-            expMonth VARCHAR(255) NOT NULL,
-            expYear VARCHAR(255) NOT NULL,
-            cvv VARCHAR(255) NOT NULL,
-            firstName VARCHAR(255) NOT NULL,
-            address VARCHAR(255) NOT NULL,
-            city VARCHAR(255) NOT NULL,
-            state VARCHAR(255) NOT NULL,
-            zip VARCHAR(255) NOT NULL,
-            email VARCHAR(255) NOT NULL,
-            licenseNumber VARCHAR(255) NOT NULL,
-            engineSerialNumber VARCHAR(255) NOT NULL,
-            make VARCHAR(255) NOT NULL,
-            model VARCHAR(255) NOT NULL,
-            year INT NOT NULL,
-            mileage INT NOT NULL,
-            color VARCHAR(255) NOT NULL,
-            additionalFeatures TEXT NOT NULL,
-            description TEXT NOT NULL,
-            startingPrice DECIMAL(10, 2) NOT NULL,
-            biddingDeadline DATETIME NOT NULL,
-            highestBid DECIMAL(10, 2) NOT NULL,
-            highestBidHolder INT NOT NULL,
-            image VARCHAR(255) NOT NULL,
+            payment_id INT,
+            address_id INT,
+
             FOREIGN KEY (owner_id) REFERENCES user(user_id),
             FOREIGN KEY (buyer_id) REFERENCES user(user_id),
-            FOREIGN KEY (listid) REFERENCES CarListing(listid)
+            FOREIGN KEY (list_id) REFERENCES CarListing(listid),
+            FOREIGN KEY (payment_id) REFERENCES Payment(payment_id),
+            FOREIGN KEY (address_id) REFERENCES Address(address_id)
         )
     """
     )
@@ -679,11 +728,11 @@ def profile(request):
         return JsonResponse({"message": "Profile updated successfully"})
 
     else:
-        return JsonResponse({'error': 'Invalid request method'}, status=405)
-    
-#logout
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+# logout
 def logout_view(request):
     logout(request)
-    print('Logged out successfully')
-    return JsonResponse({'message': 'Logout successful'})
-
+    print("Logged out successfully")
+    return JsonResponse({"message": "Logout successful"})

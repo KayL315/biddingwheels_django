@@ -34,7 +34,7 @@ urlpatterns = [
     path('payment', views.payment),
     path('transactions', views.fetch_transactions),
     path('post-listing', views.post_listing),
-    path('create-transaction-table', views.create_transaction_table),
+    path('create-transaction-tables', views.create_transaction_tables),
     path('check-table-desp/<tablename>', views.check_table),
     path('fetch-table-data/<tablename>', views.fecth_table_data),
     path('add-fake-data', views.add_fake_data),
