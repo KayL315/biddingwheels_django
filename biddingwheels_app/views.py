@@ -527,13 +527,92 @@ def payment(request):
         cursor = connection.cursor()
         cursor.execute(
             f"""
-            INSERT INTO Transaction (listid, cardName, cardNumber, expMonth, expYear, cvv, firstName, address, city, state, zip, email, amount, user_id)
+            INSERT INTO Transactions (listid, cardName, cardNumber, expMonth, expYear, cvv, firstName, address, city, state, zip, email, amount, user_id)
             VALUES ({listid}, '{cardName}', '{cardNumber}', '{expMonth}', '{expYear}', '{cvv}', '{firstName}', '{address}', '{city}', '{state}', '{zip}', '{email}', {amount}, {user_id})
         """
         )
         return JsonResponse({"message": "Payment successful"}, 200)
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+def check_table(request, tablename):
+    cursor = connection.cursor()
+    cursor.execute(f"DESCRIBE {tablename}")
+    rows = cursor.fetchall()
+    return JsonResponse(rows, safe=False)
+
+def fecth_table_data(request, tablename):
+    cursor = connection.cursor()
+    cursor.execute(f"SELECT * FROM {tablename}")
+    rows = cursor.fetchall()
+    return JsonResponse(rows, safe=False)
+
+def add_fake_data(request):
+    # add fake data to the Transactions table
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        INSERT INTO Transactions (owner_id, buyer_id, listid, amount, data, cardName, cardNumber, expMonth, expYear, cvv, firstName, address, city, state, zip, email, licenseNumber, engineSerialNumber, make, model, year, mileage, color, additionalFeatures, description, startingPrice, biddingDeadline, highestBid, highestBidHolder, image)
+        VALUES (1, 2, 1, 5000.00, '2021-03-01', 'John Doe', '123456789', '12', '2023', '123', 'John', '123 Main St', 'New York', 'NY', '10001', 'john.doe@gmail.com', '123456', '123456', 'Toyota', 'Camry', 2018, 50000, 'Red', 'Leather seats, sunroof', 'Great car, low mileage', 4000.00, '2021-03-15 12:00:00', 4500.00, 2, 'https://example.com/car1.jpg'),
+                (2, 3, 2, 8000.00, '2021-03-02', 'Jane Bob', '987654321', '11', '2022', '456', 'Jane', '456 Elm St', 'Los Angeles', 'CA', '90001', 'john.bob@gmail.com', '654321', '654321', 'Honda', 'Accord', 2019, 30000, 'Blue', 'Leather seats, sunroof', 'Great car, low mileage', 7000.00, '2021-03-20 12:00:00', 7500.00, 1, 'https://example.com/car2.jpg'),
+                (3, 4, 1, 10000.00, '2021-03-03', 'John Doe', '123456789', '12', '2023', '123', 'John', '123 Main St', 'New York', 'NY', '10001', 'use2@gmail.com', '123456', '123456', 'Toyota', 'Corolla', 2017, 40000, 'Black', 'Leather seats, sunroof', 'Great car, low mileage', 9000.00, '2021-03-25 12:00:00', 9500.00, 2, 'https://example.com/car3.jpg'),
+                (4, 5, 2, 12000.00, '2021-03-04', 'Jane Bob', '987654321', '11', '2022', '456', 'Jane', '456 Elm St', 'Los Angeles', 'CA', '90001', 'user3@gmail.com', '654321', '654321', 'Toyota', 'RAV4', 2016, 60000, 'White', 'Leather seats, sunroof', 'Great car, low mileage', 11000.00, '2021-03-30 12:00:00', 11500.00, 1, 'https://example.com/car4.jpg'),
+                (5, 6, 1, 15000.00, '2021-03-05', 'John Doe', '123456789', '12', '2023', '123', 'John', '123 Main St', 'New York', 'NY', '10001', 'user4@gmail.com', '123456', '123456', 'Toyota', 'Highlander', 2015, 70000, 'Silver', 'Leather seats, sunroof', 'Great car, low mileage', 14000.00, '2021-04-05 12:00:00', 14500.00, 2, 'https://example.com/car5.jpg')
+    """
+    )
+    return JsonResponse({"message": "Fake data added successfully"}, status=200)
+
+
+def create_transaction_table(request):
+    cursor = connection.cursor()
+    cursor.execute("DROP TABLE IF EXISTS Transactions")
+    cursor.execute(
+        """
+        CREATE TABLE Transactions (
+            transaction_id INT PRIMARY KEY AUTO_INCREMENT,
+            owner_id INT,
+            buyer_id INT,
+            listid INT,
+            amount FLOAT NOT NULL,
+            data DATE NOT NULL,
+            cardName VARCHAR(255) NOT NULL,
+            cardNumber VARCHAR(255) NOT NULL,
+            expMonth VARCHAR(255) NOT NULL,
+            expYear VARCHAR(255) NOT NULL,
+            cvv VARCHAR(255) NOT NULL,
+            firstName VARCHAR(255) NOT NULL,
+            address VARCHAR(255) NOT NULL,
+            city VARCHAR(255) NOT NULL,
+            state VARCHAR(255) NOT NULL,
+            zip VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            licenseNumber VARCHAR(255) NOT NULL,
+            engineSerialNumber VARCHAR(255) NOT NULL,
+            make VARCHAR(255) NOT NULL,
+            model VARCHAR(255) NOT NULL,
+            year INT NOT NULL,
+            mileage INT NOT NULL,
+            color VARCHAR(255) NOT NULL,
+            additionalFeatures TEXT NOT NULL,
+            description TEXT NOT NULL,
+            startingPrice DECIMAL(10, 2) NOT NULL,
+            biddingDeadline DATETIME NOT NULL,
+            highestBid DECIMAL(10, 2) NOT NULL,
+            highestBidHolder INT NOT NULL,
+            image VARCHAR(255) NOT NULL,
+            FOREIGN KEY (owner_id) REFERENCES user(user_id),
+            FOREIGN KEY (buyer_id) REFERENCES user(user_id),
+            FOREIGN KEY (listid) REFERENCES CarListing(listid)
+        )
+    """
+    )
+
+    # fecth description of all Transactions table
+    cursor.execute("DESCRIBE Transactions")
+    rows = cursor.fetchall()
+
+    return JsonResponse(rows, safe=False)
 
 
 # fetch all transactions
