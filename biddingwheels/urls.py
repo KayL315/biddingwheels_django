@@ -31,4 +31,6 @@ urlpatterns = [
     path('profile', views.profile),
     path('submit-bid', views.submit_bid),
     path('post-listing', views.post_listing),
+    path('logout', views.logout_view),
+
 ]

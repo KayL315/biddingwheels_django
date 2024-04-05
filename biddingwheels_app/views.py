@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import check_password
 from datetime import datetime
-
+from django.contrib.auth import logout
 import logging
 
 # 配置日志记录器
@@ -71,7 +71,45 @@ def admin_reports(request):
     except Exception:
         return HttpResponse(status=404)
 
+def all_listings(request):
+    cursor = connection.cursor()
+    cursor.execute('''
+        SELECT 
+            cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
+            cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
+            cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
+            cl.highestBidHolder, u.username, cl.image
+        FROM 
+            CarListing cl
+            JOIN User u ON cl.sellerID = u.user_id
+    ''')
 
+    rows = cursor.fetchall()
+
+    data = [
+        {
+            'listid': row[0],
+            'licenseNumber': row[1],
+            'engineSerialNumber': row[2],
+            'make': row[3],
+            'model': row[4],
+            'year': row[5],
+            'mileage': row[6],
+            'city': row[7],
+            'color': row[8],
+            'additionalFeatures': row[9],
+            'description': row[10],
+            'startingPrice': row[11],
+            'biddingDeadline': row[12],
+            'highestBid': row[13],
+            'highestBidHolder': row[14],
+            'sellerUsername': row[15],
+            'image': row[16]
+        }
+        for row in rows
+    ]
+
+    return JsonResponse(data, safe=False)
 
 def website_stats(request):
     class Stats:
@@ -340,43 +378,50 @@ def login(request):
 
 
 # 检查用户是否登录
-
 def check_session(request):
     if 'user_id' in request.session and 'user_role' in request.session:
         # 用户已登录，返回用户信息
         user_id = request.session['user_id']
         user_role = request.session['user_role']
+        print(request.session['user_role']) 
         return JsonResponse({'user_id': user_id, 'user_role': user_role})
     else:
         # 用户未登录，返回401状态码
         return JsonResponse({'error': 'Not logged in'}, status=401)
-
-
     
-# def check_session(request):
-#     if request.method == 'OPTIONS':
-#         response = JsonResponse({'message': 'Preflight request handled successfully'})
-#         response['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-#         response['Access-Control-Allow-Credentials'] = True
-#         response['Access-Control-Allow-Headers'] = 'Content-Type'
-#         response['Access-Control-Allow-Methods'] = 'GET'
-#         return response
+# payment
+@csrf_exempt
+def payment(request, listid):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        cardName = data.get('cardName')
+        cardNumber = data.get('cardNumber')
+        expMonth = data.get('expMonth')
+        expYear = data.get('expYear')
+        cvv = data.get('cvv')
+        firstName = data.get('firstName')
+        address = data.get('address')
+        city = data.get('city')
+        state = data.get('state')
+        zip = data.get('zip')
+        email = data.get('email')
+        amount = data.get('amount')
+        user_id = data.get('userId')
 
-#     user_id = request.session.get('user_id')
-#     user_role = request.session.get('user_role')
+        # fetch user from session
+        user = User.objects.get(user_id=user_id)
 
-#     if user_id and user_role:
-#         return JsonResponse({'message': 'Session is valid'})
-#     else:
-#         return JsonResponse({'error': 'Session is invalid'}, status=401)
+        if not user:
+            return JsonResponse({'error': 'User is not authenticated'}, status=401)
+        
 
-# def check_session(request):
-#     if request.user.is_authenticated:
-#         return JsonResponse({'message': 'User is authenticated'})
-#     else:
-#         return JsonResponse({'error': 'User is not authenticated'}, status=401)
+        
 
+        # 处理支付逻辑
+        return JsonResponse({'message': f'Payment of ${amount} completed successfully'})
 
+    else:
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
 
 #profile
 @csrf_exempt
@@ -403,3 +448,9 @@ def profile(request):
 
     else:
         return JsonResponse({'error': 'Invalid request method'}, status=405)
+    
+#logout
+def logout_view(request):
+    logout(request)
+    print('Logged out successfully')
+    return JsonResponse({'message': 'Logout successful'})
