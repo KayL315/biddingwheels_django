@@ -2,18 +2,15 @@ import datetime
 import json
 import os
 import dotenv
+from pymysql import DatabaseError, IntegrityError
 from .models import User
 from django.db import connection
-<<<<<<< HEAD
-from django.shortcuts import render
-from django.http import HttpResponseBadRequest, JsonResponse, HttpResponse
-=======
 from django.shortcuts import render, HttpResponse, redirect
-from django.http import JsonResponse, HttpResponse
->>>>>>> profile
+from django.http import HttpResponseBadRequest, JsonResponse, HttpResponse
 from dotenv import load_dotenv
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.hashers import check_password
+from datetime import datetime
 
 import logging
 
@@ -142,30 +139,40 @@ def detail_page(request, listid):
     finally:
         cursor.close()
 
-
+@csrf_exempt
 def post_report(request):
+    if request.method != 'POST':
+        return HttpResponseBadRequest('Invalid request method')
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             reporter_id = int (data['reporter_id'])
             description = data['description']
             listing_id = int (data['listing_id'])
-            submit_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Ensure this is in a safe format
+            submit_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # submit_time = datetime.now()
 
             with connection.cursor() as cursor:
                 cursor.execute('''
-                    INSERT INTO ListingReport (reporter_id, description, listing_id, submit_time) 
+                    INSERT INTO ListingReport (reporter_id, submit_time, description, listing_id) 
                     VALUES (%s, %s, %s, %s)
-                ''', [reporter_id, description, listing_id, submit_time])
+                ''', [reporter_id, submit_time, description, listing_id])
             
             return JsonResponse({'message': 'Report submitted successfully'})
 
+
         except KeyError as e:
             return HttpResponseBadRequest(f'Missing field: {e}')
+        except ValueError as e:
+            # This will catch issues like conversion errors
+            return HttpResponseBadRequest(f'Invalid data: {e}')
+        except DatabaseError as e:
+            # Specific handling for database errors
+            return HttpResponseBadRequest(f'Database error: {e}')
         except Exception as e:
-            return HttpResponseBadRequest(f'An error occurred: {e}')
-
-    return HttpResponseBadRequest('Invalid request method')
+            # Catch-all for any other exceptions
+            return HttpResponseBadRequest(f'An unexpected error occurred: {e}')
 
 # 用户注册
 @csrf_exempt  # 禁用 CSRF 防护，以便前端可以发送 POST 请求
