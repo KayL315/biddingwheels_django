@@ -289,17 +289,24 @@ def submit_bid(request):
                         "UPDATE CarListing SET highestBid = %s, highestBidHolder = %s WHERE listid = %s",
                         [bid, user_id, listing_id],
                     )
-                    return JsonResponse(
-                        {"success": True, "message": "Bid placed successfully"}
+                    # Fetch the username of the highest bid holder
+                    cursor.execute(
+                        "SELECT username FROM user WHERE user_id = %s", [user_id]
                     )
-                else:
-                    return JsonResponse(
-                        {
-                            "success": False,
-                            "message": "Bid must be higher than the current highest bid",
-                        },
-                        status=400,
-                    )
+                    user_row = cursor.fetchone()
+                    if user_row:
+                        highest_bid_holder_username = user_row[0]
+                        return JsonResponse(
+                            {
+                                "success": True,
+                                "message": "Bid placed successfully",
+                                "highestBidHolderUsername": highest_bid_holder_username  # include the username in the response
+                            }
+                        )
+                    else:
+                        return JsonResponse(
+                            {"success": False, "message": "User not found"}, status=404
+                        )
             else:
                 return JsonResponse(
                     {"success": False, "message": "Car listing not found"}, status=404
