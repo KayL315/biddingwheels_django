@@ -35,5 +35,6 @@ urlpatterns = [
     path('transactions', views.fetch_transactions),
     path('post-listing', views.post_listing),
     path('logout', views.logout_view),
+    path('user_listings', views.user_listings),
 
 ]
