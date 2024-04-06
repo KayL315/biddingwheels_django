@@ -71,8 +71,8 @@ def admin_reports(request):
         ]
         return JsonResponse(data, safe=False)
 
-    except Exception:
-        return HttpResponse(status=404)
+    except Exception as e:
+        return HttpResponse(str(e), status=404)
 
 
 def all_listings(request):
@@ -135,25 +135,55 @@ def all_listings(request):
 
 
 def website_stats(request):
-    class Stats:
-        def __init__(self, dates, sales):
-            self.dates = dates
-            self.sales = sales
-
-        def serialize(self):
-            return {
-                "dates": self.dates,
-                "sales": self.sales,
+    try:
+        cursor = connection.cursor()
+        cursor.execute('''SELECT 
+            COUNT(*) as Total_Sales, 
+             date
+        FROM Transactions
+        GROUP BY 
+            date;''')
+        rows = cursor.fetchall()
+        cursor.execute('''
+            SELECT COUNT(model)as model_sales, model
+            FROM
+            (SELECT 
+                COUNT(*) as Total_Sales, 
+                model, date
+            FROM (
+                SELECT * 
+                FROM Transactions t
+                INNER JOIN CarListing c ON t.list_id = c.listid
+            ) as joint
+            GROUP BY 
+                date, 
+                model) as sub
+                GROUP BY model
+            ORDER BY model_sales DESC;
+        ''')
+        rows2 = cursor.fetchall()
+        sales = [
+            {
+                "Total_Sales": row[0],
+                "Date":row[1]
             }
+            for row in rows
+        ]
+        model_sales = [
+            {
+                "Sold": row[0],
+                "Model": row[1]
+            }
+            for row in rows2
+        ]
+        data = {
+            "sales": sales,
+            "model_sales": model_sales
+        }
+        return JsonResponse(data)
+    except Exception as e:
+        return JsonResponse(str(e), status=404)
 
-    stat = Stats(
-        ["Mar-01", "Mar-02", "Mar-03", "Mar-04", "Mar-05"], [34, 60, 23, 55, 69]
-    )
-    stat_json = json.dumps(stat.serialize())
-    if stat_json:
-        return HttpResponse(stat_json)
-    else:
-        return HttpResponse(status=404)
 
 
 def detail_page(request, listid):
