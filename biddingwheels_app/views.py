@@ -243,16 +243,21 @@ def detail_page(request, listid):
 @csrf_exempt
 def post_listing(request):
     if request.method == "POST":
+        if not request.session.get("user_id"):
+            return JsonResponse(
+                {"success": False, "message": "User not logged in"}, status=401
+            )
         try:
             data = json.loads(request.body)
+            print(request.session.get("user_id"))
 
             values = (
-                data.get("sellerID", 1),  # Default value set to 1
+                request.session.get("user_id"),
                 data.get("licenseNumber", ""),
                 data.get("engineSerialNumber", ""),
                 data.get("make", ""),
                 data.get("model", ""),
-                data.get("year", 0),
+                data.get("year", 2024),
                 data.get("mileage", 0),
                 data.get("city", ""),
                 data.get("color", ""),
@@ -260,10 +265,11 @@ def post_listing(request):
                 data.get("description", ""),
                 data.get("startingPrice", 0),
                 data.get("biddingDeadline", ""),
-                -1,  # Assuming -1 is the default value for highestBid and highestBidHolder
-                1,  # Assuming 1 is the default value for highestBidHolder
+                data.get("highestBid"),
+                request.session.get("user_id"),
                 data.get("image", ""),
             )
+            print(values)
 
             # Execute the SQL query.
             with connection.cursor() as cursor:
