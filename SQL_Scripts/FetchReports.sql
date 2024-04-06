@@ -4,6 +4,6 @@ CarListing c
 INNER JOIN
 (SELECT r.listing_id as Lister, r.description, u.username as Reporter, r.reporter_id as Reporter_id
 FROM biddingwheels.ListingReport r
-INNER JOIN User u ON u.user_id = r.reporter_id) as with_listid
+INNER JOIN user u ON u.user_id = r.reporter_id) as with_listid
 ON c.listid = with_listid.Lister
-INNER JOIN User u ON u.user_id = c.sellerid;
+INNER JOIN user u ON u.user_id = c.sellerid;

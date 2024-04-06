@@ -49,9 +49,9 @@ def admin_reports(request):
                         u.username as Reporter, r.reporter_id as Reporter_id
                     FROM 
                         biddingwheels.ListingReport r
-                        INNER JOIN User u ON u.user_id = r.reporter_id
+                        INNER JOIN user u ON u.user_id = r.reporter_id
                 ) as with_listid ON c.listid = with_listid.Lister
-                INNER JOIN User u ON u.user_id = c.sellerid
+                INNER JOIN user u ON u.user_id = c.sellerid
         """
         )
         rows = cursor.fetchall()
@@ -87,7 +87,7 @@ def all_listings(request):
             cl.highestBidHolder, u.username, cl.image
         FROM 
             CarListing cl
-            JOIN User u ON cl.sellerID = u.user_id
+            JOIN user u ON cl.sellerID = u.user_id
     """
     )
 
@@ -103,7 +103,7 @@ def all_listings(request):
             cl.highestBidHolder, u.username, cl.image
         FROM 
             CarListing cl
-            JOIN User u ON cl.sellerID = u.user_id
+            JOIN user u ON cl.sellerID = u.user_id
     """
     )
 
@@ -199,8 +199,8 @@ def detail_page(request, listid):
                 cl.highestBidHolder, u.username, b.username AS highestBidHolderUsername, cl.image
             FROM 
                 CarListing cl
-                JOIN User u ON cl.sellerID = u.user_id
-                LEFT JOIN User b ON cl.highestBidHolder = b.user_id
+                JOIN user u ON cl.sellerID = u.user_id
+                LEFT JOIN user b ON cl.highestBidHolder = b.user_id
             WHERE 
                 cl.listid = %s
         """,
@@ -855,7 +855,7 @@ def user_listings(request):
                         "image": row[15],
                     }
                     listings.append(listing_data)
-
+                    print("each listing:",listing_data)
                 print("Listings:", listings)
                 
                 return JsonResponse({"status": "success", "listings": listings})
