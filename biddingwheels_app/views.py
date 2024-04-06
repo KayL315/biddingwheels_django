@@ -72,12 +72,14 @@ def admin_reports(request):
         ]
         return JsonResponse(data, safe=False)
 
-    except Exception:
-        return HttpResponse(status=404)
+    except Exception as e:
+        return HttpResponse(str(e), status=404)
+
 
 def all_listings(request):
     cursor = connection.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT 
             cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
             cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
@@ -86,7 +88,9 @@ def all_listings(request):
         FROM 
             CarListing cl
             JOIN User u ON cl.sellerID = u.user_id
-    ''')
+    """
+    )
+
 
 def all_listings(request):
     cursor = connection.cursor()
@@ -132,25 +136,55 @@ def all_listings(request):
 
 
 def website_stats(request):
-    class Stats:
-        def __init__(self, dates, sales):
-            self.dates = dates
-            self.sales = sales
-
-        def serialize(self):
-            return {
-                "dates": self.dates,
-                "sales": self.sales,
+    try:
+        cursor = connection.cursor()
+        cursor.execute('''SELECT 
+            COUNT(*) as Total_Sales, 
+             date
+        FROM Transactions
+        GROUP BY 
+            date;''')
+        rows = cursor.fetchall()
+        cursor.execute('''
+            SELECT COUNT(model)as model_sales, model
+            FROM
+            (SELECT 
+                COUNT(*) as Total_Sales, 
+                model, date
+            FROM (
+                SELECT * 
+                FROM Transactions t
+                INNER JOIN CarListing c ON t.list_id = c.listid
+            ) as joint
+            GROUP BY 
+                date, 
+                model) as sub
+                GROUP BY model
+            ORDER BY model_sales DESC;
+        ''')
+        rows2 = cursor.fetchall()
+        sales = [
+            {
+                "Total_Sales": row[0],
+                "Date":row[1]
             }
+            for row in rows
+        ]
+        model_sales = [
+            {
+                "Sold": row[0],
+                "Model": row[1]
+            }
+            for row in rows2
+        ]
+        data = {
+            "sales": sales,
+            "model_sales": model_sales
+        }
+        return JsonResponse(data)
+    except Exception as e:
+        return JsonResponse(str(e), status=404)
 
-    stat = Stats(
-        ["Mar-01", "Mar-02", "Mar-03", "Mar-04", "Mar-05"], [34, 60, 23, 55, 69]
-    )
-    stat_json = json.dumps(stat.serialize())
-    if stat_json:
-        return HttpResponse(stat_json)
-    else:
-        return HttpResponse(status=404)
 
 
 def detail_page(request, listid):
@@ -290,17 +324,24 @@ def submit_bid(request):
                         "UPDATE CarListing SET highestBid = %s, highestBidHolder = %s WHERE listid = %s",
                         [bid, user_id, listing_id],
                     )
-                    return JsonResponse(
-                        {"success": True, "message": "Bid placed successfully"}
+                    # Fetch the username of the highest bid holder
+                    cursor.execute(
+                        "SELECT username FROM user WHERE user_id = %s", [user_id]
                     )
-                else:
-                    return JsonResponse(
-                        {
-                            "success": False,
-                            "message": "Bid must be higher than the current highest bid",
-                        },
-                        status=400,
-                    )
+                    user_row = cursor.fetchone()
+                    if user_row:
+                        highest_bid_holder_username = user_row[0]
+                        return JsonResponse(
+                            {
+                                "success": True,
+                                "message": "Bid placed successfully",
+                                "highestBidHolderUsername": highest_bid_holder_username,  # include the username in the response
+                            }
+                        )
+                    else:
+                        return JsonResponse(
+                            {"success": False, "message": "User not found"}, status=404
+                        )
             else:
                 return JsonResponse(
                     {"success": False, "message": "Car listing not found"}, status=404
@@ -468,43 +509,47 @@ def check_session(request):
             return JsonResponse(user_data)
         except User.DoesNotExist:
             return JsonResponse({'error': 'User does not exist'}, status=404)
+        # user_id = request.session["user_id"]
+        # user_role = request.session["user_role"]
+        # print(request.session["user_role"])
+        # return JsonResponse({"user_id": user_id, "user_role": user_role})
     else:
         # 用户未登录，返回401状态码
-        return JsonResponse({'error': 'Not logged in'}, status=401)
-    
+        return JsonResponse({"error": "Not logged in"}, status=401)
+
+
 # payment
 @csrf_exempt
 def payment(request, listid):
-    if request.method == 'POST':
+    if request.method == "POST":
         data = json.loads(request.body)
-        cardName = data.get('cardName')
-        cardNumber = data.get('cardNumber')
-        expMonth = data.get('expMonth')
-        expYear = data.get('expYear')
-        cvv = data.get('cvv')
-        firstName = data.get('firstName')
-        address = data.get('address')
-        city = data.get('city')
-        state = data.get('state')
-        zip = data.get('zip')
-        email = data.get('email')
-        amount = data.get('amount')
-        user_id = data.get('userId')
+        cardName = data.get("cardName")
+        cardNumber = data.get("cardNumber")
+        expMonth = data.get("expMonth")
+        expYear = data.get("expYear")
+        cvv = data.get("cvv")
+        firstName = data.get("firstName")
+        address = data.get("address")
+        city = data.get("city")
+        state = data.get("state")
+        zip = data.get("zip")
+        email = data.get("email")
+        amount = data.get("amount")
+        user_id = data.get("userId")
 
         # fetch user from session
         user = User.objects.get(user_id=user_id)
 
         if not user:
-            return JsonResponse({'error': 'User is not authenticated'}, status=401)
-        
-
-        
+            return JsonResponse({"error": "User is not authenticated"}, status=401)
 
         # 处理支付逻辑
-        return JsonResponse({'message': f'Payment of ${amount} completed successfully'})
+        return JsonResponse({"message": f"Payment of ${amount} completed successfully"})
 
     else:
-        return JsonResponse({'error': 'Invalid request method'}, status=405)
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
 # payment
 @csrf_exempt
 def payment(request):
@@ -534,13 +579,137 @@ def payment(request):
         cursor = connection.cursor()
         cursor.execute(
             f"""
-            INSERT INTO Transaction (listid, cardName, cardNumber, expMonth, expYear, cvv, firstName, address, city, state, zip, email, amount, user_id)
+            INSERT INTO Transactions (listid, cardName, cardNumber, expMonth, expYear, cvv, firstName, address, city, state, zip, email, amount, user_id)
             VALUES ({listid}, '{cardName}', '{cardNumber}', '{expMonth}', '{expYear}', '{cvv}', '{firstName}', '{address}', '{city}', '{state}', '{zip}', '{email}', {amount}, {user_id})
         """
         )
         return JsonResponse({"message": "Payment successful"}, 200)
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+def check_table(request, tablename):
+    cursor = connection.cursor()
+    cursor.execute(f"DESCRIBE {tablename}")
+    rows = cursor.fetchall()
+    return JsonResponse(rows, safe=False)
+
+
+def fecth_table_data(request, tablename):
+    cursor = connection.cursor()
+    cursor.execute(f"SELECT * FROM {tablename}")
+    rows = cursor.fetchall()
+    return JsonResponse(rows, safe=False)
+
+
+def add_fake_data(request):
+    # add fake data to the Transactions table
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+            INSERT INTO Payment (user_id, cardName, cardNumber, expMonth, expYear, cvv) 
+            VALUES (1, 'John Doe', '123456789', '12', '2023', '123'),
+                    (2, 'Jane Bob', '987654321', '11', '2022', '456'),
+                    (3, 'John Doe', '123456789', '12', '2023', '123'),
+                    (4, 'Jane Bob', '987654321', '11', '2022', '456'),
+                    (5, 'John Doe', '123456789', '12', '2023', '123')
+        """,
+    )
+
+    cursor.execute(
+        """
+            INSERT INTO Address (user_id, fullName, address, city, state, zip, email) 
+            VALUES  (1, "user1", '123 Main St', 'New York', 'NY', '10001', 'john.doe@gmail.com'),
+                    (2, "user2", '456 Elm St', 'Los Angeles', 'CA', '90001', 'john.bob@gmail.com'),
+                    (3, "user3", '123 Main St', 'New York', 'NY', '10001', 'user3@gmail.com'),
+                    (4, "user4", '456 Elm St', 'Los Angeles', 'CA', '90001', 'user4@gmail.com'),
+                    (5, "user5", '123 Main St', 'New York', 'NY', '10001', 'user4@gmail.com')
+        """,
+    )
+
+    cursor.execute(
+        """
+        INSERT INTO Transactions (owner_id, buyer_id, list_id, amount, data, payment_id, address_id)
+        VALUES  (1, 3, 1, 5000.00, '2021-03-01',  3, 3),
+                (1, 4, 1, 8000.00, '2021-03-02',  4, 4),
+                (1, 5, 1, 10000.00, '2021-03-03', 5, 5),
+                (2, 3, 2, 12000.00, '2021-03-04', 3, 3),
+                (2, 4, 2, 15000.00, '2021-03-05', 4, 4),
+                (2, 5, 2, 16000.00, '2021-03-06', 5, 5)
+    """
+    )
+    return JsonResponse({"message": "Fake data added successfully"}, status=200)
+
+
+def create_transaction_tables(request):
+    cursor = connection.cursor()
+    # # start a transaction
+    # cursor.execute("START TRANSACTION")
+    cursor.execute("DROP TABLE IF EXISTS Transactions")
+    cursor.execute("DROP TABLE IF EXISTS Payment")
+    cursor.execute("DROP TABLE IF EXISTS Shipping")
+    cursor.execute("DROP TABLE IF EXISTS Address")
+
+    cursor.execute(
+        """
+        CREATE TABLE Payment (
+            payment_id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT,
+            cardName VARCHAR(255) NOT NULL,
+            cardNumber VARCHAR(255) NOT NULL,
+            expMonth VARCHAR(255) NOT NULL,
+            expYear VARCHAR(255) NOT NULL,
+            cvv VARCHAR(255) NOT NULL,
+
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )
+    """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE Address (
+            address_id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT,
+            fullName VARCHAR(255) NOT NULL,
+            address VARCHAR(255) NOT NULL,
+            city VARCHAR(255) NOT NULL,
+            state VARCHAR(255) NOT NULL,
+            zip VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE Transactions (
+            transaction_id INT PRIMARY KEY AUTO_INCREMENT,
+            owner_id INT,
+            buyer_id INT,
+            list_id INT,
+            amount FLOAT NOT NULL,
+            data DATE NOT NULL,
+            payment_id INT,
+            address_id INT,
+
+            FOREIGN KEY (owner_id) REFERENCES user(user_id),
+            FOREIGN KEY (buyer_id) REFERENCES user(user_id),
+            FOREIGN KEY (list_id) REFERENCES CarListing(listid),
+            FOREIGN KEY (payment_id) REFERENCES Payment(payment_id),
+            FOREIGN KEY (address_id) REFERENCES Address(address_id)
+        )
+    """
+    )
+
+    # fecth description of all Transactions table
+    cursor.execute("DESCRIBE Transactions")
+    rows = cursor.fetchall()
+
+    return JsonResponse(rows, safe=False)
 
 
 # fetch all transactions
@@ -629,9 +798,10 @@ def profile(request):
         return JsonResponse({"message": "Profile updated successfully"})
 
     else:
-        return JsonResponse({'error': 'Invalid request method'}, status=405)
-    
-#logout
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+# logout
 def logout_view(request):
     logout(request)
     print('Logged out successfully')

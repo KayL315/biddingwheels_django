@@ -3,7 +3,7 @@ DROP  TABLE IF EXISTS CarListing;
 CREATE TABLE CarListing (
     listid INT AUTO_INCREMENT PRIMARY KEY,
     sellerID INT,
-    foreign key (sellerID) references User(user_id),
+    foreign key (sellerID) references user(user_id),
     licenseNumber VARCHAR(255),
     engineSerialNumber VARCHAR(255),
     make VARCHAR(255),
@@ -18,7 +18,7 @@ CREATE TABLE CarListing (
     biddingDeadline DATETIME,
     highestBid DECIMAL(10, 2),
     highestBidHolder INT,  
-    foreign key (highestBidHolder) references User(user_id),
+    foreign key (highestBidHolder) references user(user_id),
     image TEXT
 );
 
