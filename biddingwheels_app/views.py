@@ -89,10 +89,9 @@ def all_listings(request):
             cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
             cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
             cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
-            cl.highestBidHolder, u.username, cl.image
+            cl.highestBidHolder, cl.image
         FROM 
             CarListing cl
-            JOIN user u ON cl.sellerID = u.user_id
     """
     )
 
@@ -115,8 +114,7 @@ def all_listings(request):
             "biddingDeadline": row[12],
             "highestBid": row[13],
             "highestBidHolder": row[14],
-            "sellerUsername": row[15],
-            "image": row[16],
+            "image": row[15],
         }
         for row in rows
     ]
@@ -127,14 +125,17 @@ def all_listings(request):
 def website_stats(request):
     try:
         cursor = connection.cursor()
-        cursor.execute('''SELECT 
+        cursor.execute(
+            """SELECT 
             COUNT(*) as Total_Sales, 
              date
         FROM Transactions
         GROUP BY 
-            date;''')
+            date;"""
+        )
         rows = cursor.fetchall()
-        cursor.execute('''
+        cursor.execute(
+            """
             SELECT COUNT(model)as model_sales, model
             FROM
             (SELECT 
@@ -150,30 +151,15 @@ def website_stats(request):
                 model) as sub
                 GROUP BY model
             ORDER BY model_sales DESC;
-        ''')
+        """
+        )
         rows2 = cursor.fetchall()
-        sales = [
-            {
-                "Total_Sales": row[0],
-                "Date":row[1]
-            }
-            for row in rows
-        ]
-        model_sales = [
-            {
-                "Sold": row[0],
-                "Model": row[1]
-            }
-            for row in rows2
-        ]
-        data = {
-            "sales": sales,
-            "model_sales": model_sales
-        }
+        sales = [{"Total_Sales": row[0], "Date": row[1]} for row in rows]
+        model_sales = [{"Sold": row[0], "Model": row[1]} for row in rows2]
+        data = {"sales": sales, "model_sales": model_sales}
         return JsonResponse(data)
     except Exception as e:
         return JsonResponse(str(e), status=404)
-
 
 
 def detail_page(request, listid):
@@ -230,6 +216,60 @@ def detail_page(request, listid):
             return HttpResponse(status=404)
     finally:
         cursor.close()
+
+
+def fetch_payment_info(request):
+    # get user_id from request body
+    data = json.loads(request.body)
+    user_id = data.get("user_id")
+
+    cursor = connection.cursor()
+    cursor.execute(
+        f"""
+        SELECT
+
+            p.cardName, p.cardNumber, p.expMonth, p.expYear, p.cvv,
+         from Payment p
+        WHERE
+            p.user_id = {user_id}
+    """
+    )
+    rows = cursor.fetchall()
+    cardInfo = [
+        {
+            "cardName": row[0],
+            "cardNumber": row[1],
+            "expMonth": row[2],
+            "expYear": row[3],
+            "cvv": row[4],
+        }
+        for row in rows
+    ]
+
+    cursor.execute(
+        f"""
+        SELECT
+
+            a.fullName, a.address, a.city, a.state, a.zip, a.email
+            from Address a
+        WHERE
+            a.user_id = {user_id}
+    """
+    )
+    rows = cursor.fetchall()
+    addressInfo = [
+        {
+            "fullName": row[0],
+            "address": row[1],
+            "city": row[2],
+            "state": row[3],
+            "zip": row[4],
+            "email": row[5],
+        }
+        for row in rows
+    ]
+
+    return JsonResponse({"cardInfo": cardInfo, "addressInfo": addressInfo})
 
 
 @csrf_exempt
@@ -473,7 +513,13 @@ def login(request):
         request.session["user_role"] = user.role
         print(request.session["user_role"])
         print(request.session["user_id"])
-        response = JsonResponse({"message": "Login successful"})
+        response = JsonResponse(
+            {
+                "message": "Login successful",
+                "user_id": user.user_id,
+                "user_role": user.role,
+            }
+        )
         response["Access-Control-Allow-Origin"] = "http://localhost:3000"
         response["Access-Control-Allow-Credentials"] = True
         return response
@@ -489,20 +535,20 @@ def login(request):
 def check_session(request):
     if "user_id" in request.session and "user_role" in request.session:
         # 用户已登录，返回用户信息
-        user_id = request.session['user_id']
-        user_role = request.session['user_role']
-        print(request.session['user_role']) 
+        user_id = request.session["user_id"]
+        user_role = request.session["user_role"]
+        print(request.session["user_role"])
         # return JsonResponse({'user_id': user_id, 'user_role': user_role})
         try:
             user = User.objects.get(pk=user_id)
             # 获取用户信息
             user_data = {
-                'user_id': user.user_id,
-                'username': user.username,
-                'avatar': user.avatar,
-                'address': user.address,
-                'payment_method': user.payment_method,
-                'user_role': user_role
+                "user_id": user.user_id,
+                "username": user.username,
+                "avatar": user.avatar,
+                "address": user.address,
+                "payment_method": user.payment_method,
+                "user_role": user_role,
             }
             print("User data:", user_data)  # 打印用户信息
             return JsonResponse(user_data)
@@ -527,38 +573,6 @@ def check_id(request):
             return JsonResponse({'error': 'User does not exist'}, status=404)
     else:
         return JsonResponse({"error": "Not logged in"}, status=401)
-
-# payment
-@csrf_exempt
-def payment(request, listid):
-    if request.method == "POST":
-        data = json.loads(request.body)
-        cardName = data.get("cardName")
-        cardNumber = data.get("cardNumber")
-        expMonth = data.get("expMonth")
-        expYear = data.get("expYear")
-        cvv = data.get("cvv")
-        firstName = data.get("firstName")
-        address = data.get("address")
-        city = data.get("city")
-        state = data.get("state")
-        zip = data.get("zip")
-        email = data.get("email")
-        amount = data.get("amount")
-        user_id = data.get("userId")
-
-        # fetch user from session
-        user = User.objects.get(user_id=user_id)
-
-        if not user:
-            return JsonResponse({"error": "User is not authenticated"}, status=401)
-
-        # 处理支付逻辑
-        return JsonResponse({"message": f"Payment of ${amount} completed successfully"})
-
-    else:
-        return JsonResponse({"error": "Invalid request method"}, status=405)
-
 
 # payment
 @csrf_exempt
@@ -638,15 +652,12 @@ def add_fake_data(request):
         """,
     )
 
+    # add fake data to the Transactions table, make sure the date is precise to the second
     cursor.execute(
         """
-        INSERT INTO Transactions (owner_id, buyer_id, list_id, amount, data, payment_id, address_id)
-        VALUES  (1, 3, 1, 5000.00, '2021-03-01',  3, 3),
-                (1, 4, 1, 8000.00, '2021-03-02',  4, 4),
-                (1, 5, 1, 10000.00, '2021-03-03', 5, 5),
-                (2, 3, 2, 12000.00, '2021-03-04', 3, 3),
-                (2, 4, 2, 15000.00, '2021-03-05', 4, 4),
-                (2, 5, 2, 16000.00, '2021-03-06', 5, 5)
+        INSERT INTO Transactions (owner_id, buyer_id, list_id, amount, date, payment_id, address_id)
+        VALUES  (1, 3, 1, 5000.00, '2021-03-01 12:00:00',  3, 3),
+                (2, 5, 2, 16000.00, '2021-03-06 12:00:00', 5, 5)
     """
     )
     return JsonResponse({"message": "Fake data added successfully"}, status=200)
@@ -700,9 +711,9 @@ def create_transaction_tables(request):
             transaction_id INT PRIMARY KEY AUTO_INCREMENT,
             owner_id INT,
             buyer_id INT,
-            list_id INT,
+            list_id INT NOT NULL Unique,
             amount FLOAT NOT NULL,
-            data DATE NOT NULL,
+            date DATE NOT NULL,
             payment_id INT,
             address_id INT,
 
@@ -790,12 +801,11 @@ def profile(request):
 # logout
 def logout_view(request):
     logout(request)
-    print('Logged out successfully')
-    return JsonResponse({'message': 'Logout successful'})
+    print("Logged out successfully")
+    return JsonResponse({"message": "Logout successful"})
 
 
-
-#展示用户发布过的posts
+# 展示用户发布过的posts
 @csrf_exempt
 def user_listings(request):
     if request.method == "GET":
@@ -841,9 +851,9 @@ def user_listings(request):
                         "image": row[15],
                     }
                     listings.append(listing_data)
-                    print("each listing:",listing_data)
+                    print("each listing:", listing_data)
                 print("Listings:", listings)
-                
+
                 return JsonResponse({"status": "success", "listings": listings})
             except Exception as e:
                 return JsonResponse(
@@ -967,17 +977,6 @@ def send_message(request):
     # 返回成功消息
     return JsonResponse({'message': 'Message sent successfully'})
 
-# @csrf_exempt
-# def get_messages(request):
-#     if 'user_id' in request.session:
-#         user_id = request.session['user_id']
-#         print('User ID:', user_id)
-#         messages = Message.objects.filter(receiver_id=user_id)
-#         print('Messages:', messages)
-#         messages_data = [{'description': message.description} for message in messages]
-#         return JsonResponse({'messages': messages_data})
-#     else:
-#         return JsonResponse({'error': 'User is not logged in'}, status=401)
 
 @csrf_exempt
 def get_messages(request):
@@ -1000,3 +999,79 @@ def get_messages(request):
             return JsonResponse({'error': 'User is not logged in'}, status=401)
     else:
         return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+@csrf_exempt
+def can_rate(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            owner_id = data.get("owner")
+            buyer_id = data.get("buyer")
+            rater = data.get("rater")
+            rated = data.get("rated")
+
+            cursor = connection.cursor()
+
+            # Determine if a transaction exists in the DB, return 404 if not
+            cursor.execute(f'''
+                SELECT transaction_id FROM Transactions
+                WHERE owner_id = {owner_id} AND buyer_id = {buyer_id};
+            ''')
+            transaction_rows = cursor.fetchone()
+            if transaction_rows is None:
+                return HttpResponse("Transaction not found", status=404)
+
+            cursor.execute(f'''
+                SELECT id FROM User_ratings
+                WHERE rater_id = {rater} AND rated_user_id = {rated};
+            ''')
+            rating_rows = cursor.fetchone()
+            if rating_rows is not None:
+                return HttpResponse("Already rated", status=403)
+
+            return HttpResponse(status=200)
+        except Exception as e:
+            return HttpResponse(e, status=500)
+    return HttpResponse("Method not allowed", status=405)
+
+
+@csrf_exempt
+def add_rating(request):
+    if request.method == "PUT":
+        try:
+            data = json.loads(request.body)
+            rater = data.get("rater")
+            rated = data.get("rated")
+            rating = data.get("rating")
+
+            with connection.cursor() as cursor:
+                cursor.execute(f'''
+                    INSERT INTO User_ratings(rater_id, rated_user_id, rating) 
+                    VALUES({rater}, {rated}, {rating});
+                ''')
+            return HttpResponse(status=200)
+        except Exception as e:
+            return HttpResponse(e, status=500)
+    return HttpResponse("Method not allowed", status=405)
+
+@csrf_exempt
+def fetch_rating(request, user_id):
+    if request.method == 'GET':
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(f'''
+                    SELECT rated_user_id, AVG(rating) FROM biddingwheels.
+                    User_ratings GROUP BY rated_user_id 
+                    HAVING rated_user_id = {user_id};
+                ''')
+                rows = cursor.fetchone()
+
+                if rows is not None:
+                    rating = rows[1]
+                    return HttpResponse(str(rating), status=200)
+                else:
+                    return HttpResponse("0", status=200)
+        except Exception as e:
+            return HttpResponse(e, status=500)
+    else:
+        return HttpResponse("Method not allowed", status=405)
