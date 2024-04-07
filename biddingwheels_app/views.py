@@ -971,7 +971,7 @@ def can_rate(request):
 
 @csrf_exempt
 def add_rating(request):
-    if request.method == "POST":
+    if request.method == "PUT":
         try:
             data = json.loads(request.body)
             rater = data.get("rater")
@@ -988,3 +988,24 @@ def add_rating(request):
             return HttpResponse(e, status=500)
     return HttpResponse("Method not allowed", status=405)
 
+@csrf_exempt
+def fetch_rating(request, user_id):
+    if request.method == 'GET':
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(f'''
+                    SELECT rated_user_id, AVG(rating) FROM biddingwheels.
+                    User_ratings GROUP BY rated_user_id 
+                    HAVING rated_user_id = {user_id};
+                ''')
+                rows = cursor.fetchone()
+
+                if rows is not None:
+                    rating = rows[1]
+                    return HttpResponse(str(rating), status=200)
+                else:
+                    return HttpResponse("0", status=200)
+        except Exception as e:
+            return HttpResponse(e, status=500)
+    else:
+        return HttpResponse("Method not allowed", status=405)

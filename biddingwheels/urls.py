@@ -45,5 +45,7 @@ urlpatterns = [
     path('other_profile/<str:username>/', views.other_profile),
     path('can_rate', views.can_rate),
     path('add_rating', views.add_rating),
+    path('fetch_rating/<int:user_id>', views.fetch_rating),
+
 
 ]
