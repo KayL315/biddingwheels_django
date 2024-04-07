@@ -41,5 +41,7 @@ urlpatterns = [
     path('logout', views.logout_view),
     path('user_listings', views.user_listings),
     path('other_profile/<str:username>/', views.other_profile),
-
+    path('send_message', views.send_message),
+    path('check_id', views.check_id),
+    path('get_messages', views.get_messages),
 ]

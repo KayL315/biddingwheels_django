@@ -4,6 +4,7 @@ import os
 import dotenv
 from pymysql import DatabaseError, IntegrityError
 from .models import User
+from .models import Message
 from django.db import connection
 from django.http import HttpResponseBadRequest, JsonResponse, HttpResponse
 from django.shortcuts import render, HttpResponse, redirect
@@ -13,8 +14,11 @@ from django.contrib.auth.hashers import check_password
 from datetime import datetime
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404
 import logging
+from datetime import datetime
+from django.utils import timezone
 
 # 配置日志记录器
 logging.basicConfig(level=logging.DEBUG)  # 设置日志级别为DEBUG
@@ -481,6 +485,7 @@ def login(request):
 
 
 # 检查用户是否登录
+@csrf_exempt
 def check_session(request):
     if "user_id" in request.session and "user_role" in request.session:
         # 用户已登录，返回用户信息
@@ -504,9 +509,24 @@ def check_session(request):
         except User.DoesNotExist:
             return JsonResponse({'error': 'User does not exist'}, status=404)
     else:
-        # 用户未登录，返回401状态码
         return JsonResponse({"error": "Not logged in"}, status=401)
-
+    
+@csrf_exempt
+def check_id(request):
+    if "user_id" in request.session and "user_role" in request.session:
+        user_id = request.session['user_id']
+        print(request.session['user_id']) 
+        try:
+            user = User.objects.get(pk=user_id)
+            user_data = {
+                'user_id': user.user_id,
+            }
+            print("User data:", user_data) 
+            return JsonResponse(user_data)
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'User does not exist'}, status=404)
+    else:
+        return JsonResponse({"error": "Not logged in"}, status=401)
 
 # payment
 @csrf_exempt
@@ -922,3 +942,61 @@ def other_profile(request, username):
         return JsonResponse(
             {"status": "error", "message": "Invalid request method"}, status=405
         )
+
+@csrf_exempt
+def send_message(request):
+    data = json.loads(request.body)
+    description = data.get('description')
+    receiver_id = data.get('receiver_id')
+    sender_id = data.get('user_id')
+
+    # 打印获取到的数据，以便调试
+    print('Description:', description)
+    print('Receiver ID:', receiver_id)
+    print('Sender ID:', sender_id)
+    timestamp = datetime.now()
+    with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO Message (senderID, receiverID, description, timestamp) 
+                    VALUES (%s, %s, %s, %s)
+                """,
+                    [sender_id, receiver_id, description, timestamp],
+                )
+
+    # 返回成功消息
+    return JsonResponse({'message': 'Message sent successfully'})
+
+# @csrf_exempt
+# def get_messages(request):
+#     if 'user_id' in request.session:
+#         user_id = request.session['user_id']
+#         print('User ID:', user_id)
+#         messages = Message.objects.filter(receiver_id=user_id)
+#         print('Messages:', messages)
+#         messages_data = [{'description': message.description} for message in messages]
+#         return JsonResponse({'messages': messages_data})
+#     else:
+#         return JsonResponse({'error': 'User is not logged in'}, status=401)
+
+@csrf_exempt
+def get_messages(request):
+    if request.method == 'GET':
+        if 'user_id' in request.session:
+            user_id = request.session['user_id']
+            messages = Message.objects.filter(receiver_id=user_id)
+            messages_data = []
+            for message in messages:
+                sender = User.objects.get(pk=message.sender_id_id)
+
+                message_info = {
+                    'description': message.description,
+                    'sender_username': sender.username
+                }
+                messages_data.append(message_info)
+            return JsonResponse({'messages': messages_data})
+        
+        else:
+            return JsonResponse({'error': 'User is not logged in'}, status=401)
+    else:
+        return JsonResponse({'error': 'Invalid request method'}, status=405)

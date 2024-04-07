@@ -26,3 +26,17 @@ class User(models.Model):
 
     class Meta:
         db_table = 'user'
+
+
+#Message table
+class Message(models.Model):
+    sender_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages', db_column='senderID')
+    receiver_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_messages', db_column='receiverID')
+    description = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"From: {self.sender_id.username}, To: {self.receiver_id.username}, Sent: {self.timestamp}"
+    
+    class Meta:
+        db_table = 'Message'
