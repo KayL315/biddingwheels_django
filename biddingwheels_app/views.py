@@ -1099,9 +1099,7 @@ def other_profile(request, username):
                     listings.append(listing_data)
 
                 # return JsonResponse({"status": "success", "listings": listings})
-                return JsonResponse(
-                    {"status": "success", "username": username, "listings": listings}
-                )
+                return JsonResponse({"status": "success", "username": username, "listings": listings, "user_id": user_id})
 
             else:
                 return JsonResponse(
