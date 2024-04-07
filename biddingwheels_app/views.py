@@ -968,3 +968,23 @@ def can_rate(request):
             return HttpResponse(e, status=500)
     return HttpResponse("Method not allowed", status=405)
 
+
+@csrf_exempt
+def add_rating(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            rater = data.get("rater")
+            rated = data.get("rated")
+            rating = data.get("rating")
+
+            with connection.cursor() as cursor:
+                cursor.execute(f'''
+                    INSERT INTO User_ratings(rater_id, rated_user_id, rating) 
+                    VALUES({rater}, {rated}, {rating});
+                ''')
+            return HttpResponse(status=200)
+        except Exception as e:
+            return HttpResponse(e, status=500)
+    return HttpResponse("Method not allowed", status=405)
+

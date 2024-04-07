@@ -43,6 +43,7 @@ urlpatterns = [
     path("logout", views.logout_view),
     path("user_listings", views.user_listings),
     path('other_profile/<str:username>/', views.other_profile),
-    path('can_rate', views.can_rate, name='can_rate'),
+    path('can_rate', views.can_rate),
+    path('add_rating', views.add_rating),
 
 ]
