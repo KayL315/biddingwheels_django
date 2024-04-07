@@ -10,5 +10,4 @@ CREATE TABLE ListingReport(
 	FOREIGN KEY (listing_id) references CarListing(listid)
 );
 
-INSERT INTO ListingReport(reporter_id, submit_time, description, listing_id) VALUES(5, NOW(), "Something wrong with this car", 1);
-INSERT INTO ListingReport(reporter_id, submit_time, description, listing_id) VALUES(6, NOW(), "Something wrong with this car", 1);
+
