@@ -40,5 +40,6 @@ urlpatterns = [
     path('add-fake-data', views.add_fake_data),
     path('logout', views.logout_view),
     path('user_listings', views.user_listings),
+    path('other_profile/<str:username>/', views.other_profile),
 
 ]

@@ -13,6 +13,7 @@ from django.contrib.auth.hashers import check_password
 from datetime import datetime
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404
 import logging
 
 # 配置日志记录器
@@ -74,22 +75,6 @@ def admin_reports(request):
 
     except Exception as e:
         return HttpResponse(str(e), status=404)
-
-
-def all_listings(request):
-    cursor = connection.cursor()
-    cursor.execute(
-        """
-        SELECT 
-            cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
-            cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
-            cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
-            cl.highestBidHolder, u.username, cl.image
-        FROM 
-            CarListing cl
-            JOIN user u ON cl.sellerID = u.user_id
-    """
-    )
 
 
 def all_listings(request):
@@ -515,10 +500,6 @@ def check_session(request):
             return JsonResponse(user_data)
         except User.DoesNotExist:
             return JsonResponse({'error': 'User does not exist'}, status=404)
-        # user_id = request.session["user_id"]
-        # user_role = request.session["user_role"]
-        # print(request.session["user_role"])
-        # return JsonResponse({"user_id": user_id, "user_role": user_role})
     else:
         # 用户未登录，返回401状态码
         return JsonResponse({"error": "Not logged in"}, status=401)
@@ -717,7 +698,6 @@ def create_transaction_tables(request):
 
     return JsonResponse(rows, safe=False)
 
-
 # fetch all transactions
 @csrf_exempt
 def fetch_transactions(request):
@@ -757,30 +737,8 @@ def fetch_transactions(request):
 
 
 #用户个人资料
-# if "user_id" in request.session and "user_role" in request.session:
-#         # 用户已登录，返回用户信息
-#         user_id = request.session['user_id']
-#         user_role = request.session['user_role']
-#         print(request.session['user_role']) 
-#         return JsonResponse({'user_id': user_id, 'user_role': user_role})
 @csrf_exempt
 def profile(request):
-    # if request.method == "GET":
-    #     if not "user_id" in request.session:
-    #         return JsonResponse({"error": "User is not authenticated"}, status=401)
-
-    #     # 获取用户个人资料
-    #     data = json.loads(request.body)
-    #     user_id = request.session["user_id"]
-    #     user = User.objects.get(pk=user_id)
-    #     # 返回用户个人资料信息
-    #     return JsonResponse({
-    #         "username": user.username,
-    #         "avatar": user.avatar,
-    #         "address": user.address,
-    #         "payment_method": user.payment_method
-    #     })
-
     if request.method == "PUT":
         if not "user_id" in request.session:
             return JsonResponse({"error": "User is not authenticated"}, status=401)
@@ -805,7 +763,6 @@ def profile(request):
 
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
-
 
 # logout
 def logout_view(request):
@@ -878,6 +835,87 @@ def user_listings(request):
             )
     else:
         # 如果请求方法不是 GET，返回请求方法错误
+        return JsonResponse(
+            {"status": "error", "message": "Invalid request method"}, status=405
+        )
+
+
+    
+
+@csrf_exempt
+def other_profile(request, username):
+    print('Received username:', username)
+    if request.method == "GET":
+        # 根据传入的用户名查找对应的用户ID
+        cursor = connection.cursor()
+        try:
+            print('Fetching profile for user:', username)
+            cursor.execute(
+                """
+                SELECT user_id
+                FROM user
+                WHERE username = %s
+                """,
+                [username],
+            )
+            user_row = cursor.fetchone()
+            print('User row:', user_row)
+            if user_row:
+                user_id = user_row[0]
+
+                cursor.execute(
+                    """
+                    SELECT 
+                        cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
+                        cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
+                        cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
+                        cl.highestBidHolder, cl.image
+                    FROM 
+                        CarListing cl
+                    WHERE 
+                        cl.sellerID = %s
+                    """,
+                    [user_id],
+                )
+
+                listings = []
+                rows = cursor.fetchall()
+                for row in rows:
+                    listing_data = {
+                        "listid": row[0],
+                        "licenseNumber": row[1],
+                        "engineSerialNumber": row[2],
+                        "make": row[3],
+                        "model": row[4],
+                        "year": row[5],
+                        "mileage": row[6],
+                        "city": row[7],
+                        "color": row[8],
+                        "additionalFeatures": row[9],
+                        "description": row[10],
+                        "startingPrice": row[11],
+                        "biddingDeadline": row[12],
+                        "highestBid": row[13],
+                        "highestBidHolder": row[14],
+                        "image": row[15],
+                    }
+                    listings.append(listing_data)
+                
+                # return JsonResponse({"status": "success", "listings": listings})
+                return JsonResponse({"status": "success", "username": username, "listings": listings})
+
+            else:
+                return JsonResponse(
+                    {"status": "error", "message": "User not found"}, status=404
+                )
+        except Exception as e:
+            print('An error occurred:', e)
+            return JsonResponse(
+                {"status": "error", "message": "An error occurred: " + str(e)}
+            )
+        finally:
+            cursor.close()
+    else:
         return JsonResponse(
             {"status": "error", "message": "Invalid request method"}, status=405
         )
