@@ -181,7 +181,8 @@ def detail_page(request, listid):
                 cl.listid, cl.licenseNumber, cl.engineSerialNumber, cl.make, cl.model, 
                 cl.year, cl.mileage, cl.city, cl.color, cl.additionalFeatures, 
                 cl.description, cl.startingPrice, cl.biddingDeadline, cl.highestBid, 
-                cl.highestBidHolder, u.username, b.username AS highestBidHolderUsername, cl.image
+                cl.highestBidHolder, u.username, u.user_id as seller, b.username AS highestBidHolderUsername, 
+                b.user_id as highestBidHolder, cl.image
             FROM 
                 CarListing cl
                 JOIN user u ON cl.sellerID = u.user_id
@@ -212,10 +213,12 @@ def detail_page(request, listid):
                 "highestBid": row[13],
                 "highestBidHolder": row[14],
                 "sellerUsername": row[15],
+                "seller": row[16],
                 "highestBidHolderUsername": (
-                    row[16] if row[16] else "No highest bid holder"
+                    row[17] if row[17] else "No highest bid holder"
                 ),
-                "image": row[17],
+                "highestBidHolder": row[18],
+                "image": row[19],
             }
 
             return JsonResponse(car_data)
