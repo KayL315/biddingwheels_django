@@ -219,7 +219,12 @@ def detail_page(request, listid):
 
 
 @csrf_exempt
+@csrf_exempt
 def fetch_payment_info(request):
+    if request.method == "POST":
+        # get user_id from request body
+        data = json.loads(request.body)
+        user_id = data.get("user_id")
     if request.method == "POST":
         # get user_id from request body
         data = json.loads(request.body)
@@ -243,7 +248,43 @@ def fetch_payment_info(request):
             }
             for row in rows
         ]
+        cursor = connection.cursor()
+        cursor.execute(
+            f"""
+            SELECT p.payment_id, p.cardName, p.cardNumber, p.expMonth, p.expYear, p.cvv from Payment p WHERE p.user_id = {user_id}
+        """
+        )
+        rows = cursor.fetchall()
+        cardInfo = [
+            {
+                "payment_id": row[0],
+                "cardName": row[1],
+                "cardNumber": row[2],
+                "expMonth": row[3],
+                "expYear": row[4],
+                "cvv": row[5],
+            }
+            for row in rows
+        ]
 
+        cursor.execute(
+            f"""
+            SELECT a.address_id, a.fullName, a.address, a.city, a.state, a.zip, a.email from Address a WHERE a.user_id = {user_id}
+        """
+        )
+        rows = cursor.fetchall()
+        addressInfo = [
+            {
+                "address_id": row[0],
+                "fullName": row[1],
+                "address": row[2],
+                "city": row[3],
+                "state": row[4],
+                "zip": row[5],
+                "email": row[6],
+            }
+            for row in rows
+        ]
         cursor.execute(
             f"""
             SELECT a.address_id, a.fullName, a.address, a.city, a.state, a.zip, a.email from Address a WHERE a.user_id = {user_id}
@@ -566,7 +607,24 @@ def check_id(request):
             print("User data:", user_data) 
             return JsonResponse(user_data)
         except User.DoesNotExist:
-            return JsonResponse({'error': 'User does not exist'}, status=404)
+            return JsonResponse({"error": "User does not exist"}, status=404)
+    else:
+        return JsonResponse({"error": "Not logged in"}, status=401)
+    
+@csrf_exempt
+def check_id(request):
+    if "user_id" in request.session and "user_role" in request.session:
+        user_id = request.session['user_id']
+        print(request.session['user_id']) 
+        try:
+            user = User.objects.get(pk=user_id)
+            user_data = {
+                'user_id': user.user_id,
+            }
+            print("User data:", user_data) 
+            return JsonResponse(user_data)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "User does not exist"}, status=404)
     else:
         return JsonResponse({"error": "Not logged in"}, status=401)
     
@@ -592,6 +650,7 @@ def check_id(request):
 def card_info(request):
     if request.method == "POST":
         data = json.loads(request.body)
+        user_id = data.get("user_id")
         user_id = data.get("user_id")
         cardName = data.get("cardName")
         cardNumber = data.get("cardNumber")
