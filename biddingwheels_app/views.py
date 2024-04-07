@@ -932,3 +932,39 @@ def other_profile(request, username):
         return JsonResponse(
             {"status": "error", "message": "Invalid request method"}, status=405
         )
+
+
+@csrf_exempt
+def can_rate(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            owner_id = data.get("owner")
+            buyer_id = data.get("buyer")
+            rater = data.get("rater")
+            rated = data.get("rated")
+
+            cursor = connection.cursor()
+
+            # Determine if a transaction exists in the DB, return 404 if not
+            cursor.execute(f'''
+                SELECT transaction_id FROM Transactions
+                WHERE owner_id = {owner_id} AND buyer_id = {buyer_id};
+            ''')
+            transaction_rows = cursor.fetchone()
+            if transaction_rows is None:
+                return HttpResponse("Transaction not found", status=404)
+
+            cursor.execute(f'''
+                SELECT id FROM User_ratings
+                WHERE rater_id = {rater} AND rated_user_id = {rated};
+            ''')
+            rating_rows = cursor.fetchone()
+            if rating_rows is not None:
+                return HttpResponse("Already rated", status=403)
+
+            return HttpResponse(status=200)
+        except Exception as e:
+            return HttpResponse(e, status=500)
+    return HttpResponse("Method not allowed", status=405)
+
