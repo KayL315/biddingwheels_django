@@ -218,58 +218,54 @@ def detail_page(request, listid):
         cursor.close()
 
 
+@csrf_exempt
 def fetch_payment_info(request):
-    # get user_id from request body
-    data = json.loads(request.body)
-    user_id = data.get("user_id")
+    if request.method == "POST":
+        # get user_id from request body
+        data = json.loads(request.body)
+        user_id = data.get("user_id")
 
-    cursor = connection.cursor()
-    cursor.execute(
-        f"""
-        SELECT
+        cursor = connection.cursor()
+        cursor.execute(
+            f"""
+            SELECT p.payment_id, p.cardName, p.cardNumber, p.expMonth, p.expYear, p.cvv from Payment p WHERE p.user_id = {user_id}
+        """
+        )
+        rows = cursor.fetchall()
+        cardInfo = [
+            {
+                "payment_id": row[0],
+                "cardName": row[1],
+                "cardNumber": row[2],
+                "expMonth": row[3],
+                "expYear": row[4],
+                "cvv": row[5],
+            }
+            for row in rows
+        ]
 
-            p.cardName, p.cardNumber, p.expMonth, p.expYear, p.cvv,
-         from Payment p
-        WHERE
-            p.user_id = {user_id}
-    """
-    )
-    rows = cursor.fetchall()
-    cardInfo = [
-        {
-            "cardName": row[0],
-            "cardNumber": row[1],
-            "expMonth": row[2],
-            "expYear": row[3],
-            "cvv": row[4],
-        }
-        for row in rows
-    ]
+        cursor.execute(
+            f"""
+            SELECT a.address_id, a.fullName, a.address, a.city, a.state, a.zip, a.email from Address a WHERE a.user_id = {user_id}
+        """
+        )
+        rows = cursor.fetchall()
+        addressInfo = [
+            {
+                "address_id": row[0],
+                "fullName": row[1],
+                "address": row[2],
+                "city": row[3],
+                "state": row[4],
+                "zip": row[5],
+                "email": row[6],
+            }
+            for row in rows
+        ]
 
-    cursor.execute(
-        f"""
-        SELECT
-
-            a.fullName, a.address, a.city, a.state, a.zip, a.email
-            from Address a
-        WHERE
-            a.user_id = {user_id}
-    """
-    )
-    rows = cursor.fetchall()
-    addressInfo = [
-        {
-            "fullName": row[0],
-            "address": row[1],
-            "city": row[2],
-            "state": row[3],
-            "zip": row[4],
-            "email": row[5],
-        }
-        for row in rows
-    ]
-
-    return JsonResponse({"cardInfo": cardInfo, "addressInfo": addressInfo})
+        return JsonResponse({"cardInfo": cardInfo, "addressInfo": addressInfo})
+    else:
+        return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
 @csrf_exempt
@@ -553,6 +549,23 @@ def check_session(request):
             print("User data:", user_data)  # 打印用户信息
             return JsonResponse(user_data)
         except User.DoesNotExist:
+            return JsonResponse({"error": "User does not exist"}, status=404)
+    else:
+        return JsonResponse({"error": "Not logged in"}, status=401)
+    
+@csrf_exempt
+def check_id(request):
+    if "user_id" in request.session and "user_role" in request.session:
+        user_id = request.session['user_id']
+        print(request.session['user_id']) 
+        try:
+            user = User.objects.get(pk=user_id)
+            user_data = {
+                'user_id': user.user_id,
+            }
+            print("User data:", user_data) 
+            return JsonResponse(user_data)
+        except User.DoesNotExist:
             return JsonResponse({'error': 'User does not exist'}, status=404)
     else:
         return JsonResponse({"error": "Not logged in"}, status=401)
@@ -574,28 +587,20 @@ def check_id(request):
     else:
         return JsonResponse({"error": "Not logged in"}, status=401)
 
-# payment
+# card info
 @csrf_exempt
-def payment(request):
+def card_info(request):
     if request.method == "POST":
         data = json.loads(request.body)
-        listid = data.get("listid")
-        user_id = data.get("userId")
-        amount = data.get("amount")
+        user_id = data.get("user_id")
         cardName = data.get("cardName")
         cardNumber = data.get("cardNumber")
         expMonth = data.get("expMonth")
         expYear = data.get("expYear")
         cvv = data.get("cvv")
-        firstName = data.get("firstName")
-        address = data.get("address")
-        city = data.get("city")
-        state = data.get("state")
-        zip = data.get("zip")
-        email = data.get("email")
 
-        # fetch user from session
-        user = User.objects.get(user_id=user_id)
+        # check user exists in user table
+        user = User.objects.filter(user_id=user_id).first()
 
         if not user:
             return JsonResponse({"error": "User is not authenticated"}, status=401)
@@ -603,11 +608,111 @@ def payment(request):
         cursor = connection.cursor()
         cursor.execute(
             f"""
-            INSERT INTO Transactions (listid, cardName, cardNumber, expMonth, expYear, cvv, firstName, address, city, state, zip, email, amount, user_id)
-            VALUES ({listid}, '{cardName}', '{cardNumber}', '{expMonth}', '{expYear}', '{cvv}', '{firstName}', '{address}', '{city}', '{state}', '{zip}', '{email}', {amount}, {user_id})
+            INSERT INTO Payment (user_id, cardName, cardNumber, expMonth, expYear, cvv)
+            VALUES ({user_id}, '{cardName}', '{cardNumber}', '{expMonth}', '{expYear}', '{cvv}')
         """
         )
-        return JsonResponse({"message": "Payment successful"}, 200)
+
+        # get the attributes  of the last inserted row
+        cursor.execute(
+            f"""
+            SELECT payment_id, cardName, cardNumber, expMonth, expYear, cvv
+            FROM Payment
+            WHERE payment_id = LAST_INSERT_ID()
+        """
+        )
+        rows = cursor.fetchall()
+
+        data = [
+            {
+                "payment_id": row[0],
+                "cardName": row[1],
+                "cardNumber": row[2],
+                "expMonth": row[3],
+                "expYear": row[4],
+                "cvv": row[5],
+            }
+            for row in rows
+        ]
+
+        return JsonResponse(
+            {"message": "Payment successful", "cardInfo": data}, status=200
+        )
+    elif request.method == "DELETE":
+        data = json.loads(request.body)
+        payment_id = data.get("payment_id")
+
+        with connection.cursor() as cursor:
+            cursor.execute(f"DELETE FROM Payment WHERE payment_id = {payment_id}")
+
+        return JsonResponse({"message": "Payment delete successful"}, status=200)
+
+    else:
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+# card info
+@csrf_exempt
+def address_info(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        user_id = data.get("user_id")
+        fullName = data.get("fullName")
+        email = data.get("email")
+        address = data.get("address")
+        city = data.get("city")
+        state = data.get("state")
+        zip = data.get("zip")
+
+        # check user exists in user table
+        user = User.objects.filter(user_id=user_id).first()
+
+        if not user:
+            return JsonResponse({"error": "User is not authenticated"}, status=401)
+
+        cursor = connection.cursor()
+        cursor.execute(
+            f"""
+            INSERT INTO Address (user_id, fullName, email, address, city, state, zip)
+            VALUES ({user_id}, '{fullName}', '{email}', '{address}', '{city}', '{state}', '{zip}')
+        """
+        )
+
+        # get the attributes  of the last inserted row
+        cursor.execute(
+            f"""
+            SELECT address_id, fullName, email, address, city, state, zip
+            FROM Address
+            WHERE address_id = LAST_INSERT_ID()
+        """
+        )
+        rows = cursor.fetchall()
+
+        data = [
+            {
+                "address_id": row[0],
+                "fullName": row[1],
+                "email": row[2],
+                "address": row[3],
+                "city": row[4],
+                "state": row[5],
+                "zip": row[6],
+            }
+            for row in rows
+        ]
+
+        return JsonResponse(
+            {"message": "Payment successful", "address": data}, status=200
+        )
+    elif request.method == "DELETE":
+        data = json.loads(request.body)
+        address_id = data.get("address_id")
+
+        with connection.cursor() as cursor:
+            cursor.execute(f"DELETE FROM Address WHERE address_id = {address_id}")
+
+        return JsonResponse({"message": "Address delete successful"}, status=200)
+
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
 
@@ -732,6 +837,7 @@ def create_transaction_tables(request):
 
     return JsonResponse(rows, safe=False)
 
+
 # fetch all transactions
 @csrf_exempt
 def fetch_transactions(request):
@@ -770,7 +876,7 @@ def fetch_transactions(request):
         return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
-#用户个人资料
+# 用户个人资料
 @csrf_exempt
 def profile(request):
     if request.method == "PUT":
@@ -797,6 +903,7 @@ def profile(request):
 
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
+
 
 # logout
 def logout_view(request):
@@ -873,16 +980,14 @@ def user_listings(request):
         )
 
 
-    
-
 @csrf_exempt
 def other_profile(request, username):
-    print('Received username:', username)
+    print("Received username:", username)
     if request.method == "GET":
         # 根据传入的用户名查找对应的用户ID
         cursor = connection.cursor()
         try:
-            print('Fetching profile for user:', username)
+            print("Fetching profile for user:", username)
             cursor.execute(
                 """
                 SELECT user_id
@@ -892,7 +997,7 @@ def other_profile(request, username):
                 [username],
             )
             user_row = cursor.fetchone()
-            print('User row:', user_row)
+            print("User row:", user_row)
             if user_row:
                 user_id = user_row[0]
 
@@ -933,16 +1038,18 @@ def other_profile(request, username):
                         "image": row[15],
                     }
                     listings.append(listing_data)
-                
+
                 # return JsonResponse({"status": "success", "listings": listings})
-                return JsonResponse({"status": "success", "username": username, "listings": listings})
+                return JsonResponse(
+                    {"status": "success", "username": username, "listings": listings}
+                )
 
             else:
                 return JsonResponse(
                     {"status": "error", "message": "User not found"}, status=404
                 )
         except Exception as e:
-            print('An error occurred:', e)
+            print("An error occurred:", e)
             return JsonResponse(
                 {"status": "error", "message": "An error occurred: " + str(e)}
             )
@@ -952,6 +1059,7 @@ def other_profile(request, username):
         return JsonResponse(
             {"status": "error", "message": "Invalid request method"}, status=405
         )
+
 
 @csrf_exempt
 def send_message(request):
