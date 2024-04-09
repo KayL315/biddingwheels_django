@@ -87,15 +87,19 @@ class Command(BaseCommand):
     help = "Runs APScheduler."
 
     def handle(self, *args, **options):
-        scheduler = BlockingScheduler(timezone=settings.TIME_ZONE)
-        scheduler.add_jobstore(DjangoJobStore(), "default")
+        scheduler = BlockingScheduler(timezone='US/Pacific',)
+        scheduler.remove_all_jobs()
+        scheduler.add_jobstore(DjangoJobStore(), "biddingwheels")
 
         scheduler.add_job(
             update_transactions,
              # every day at midnight
             trigger=CronTrigger(
-                day_of_week="mon-sun", hour="00", minute="01"
+                year="*", month="*", day="*/1", hour="0", minute="01", second="5"
             ),
+            # 'cron',
+            hour="0",
+            minute="0",
             id="update_transactions",  # The `id` assigned to each job MUST be unique
             max_instances=1,
             replace_existing=True,
