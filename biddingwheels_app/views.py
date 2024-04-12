@@ -20,10 +20,10 @@ import logging
 from datetime import datetime
 from django.utils import timezone
 
-# 配置日志记录器
-logging.basicConfig(level=logging.DEBUG)  # 设置日志级别为DEBUG
 
-# 获取logger对象
+logging.basicConfig(level=logging.DEBUG)  
+
+
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -478,40 +478,39 @@ def post_report(request):
             return HttpResponseBadRequest(f"An unexpected error occurred: {e}")
 
 
-# 用户注册
-@csrf_exempt  # 禁用 CSRF 防护，以便前端可以发送 POST 请求
+# signup logic
+@csrf_exempt  #allow cross origin requests
 def signup(request):
     if request.method == "POST":
-        # 从前端拿用户名和密码
+        # get username and password from request body
         data = json.loads(request.body)
         username = data.get("username")
         password = data.get("password")
-        # 检查一下用户名是否已经存在
+        # check if the username already exists
         if User.objects.filter(username=username).exists():
             return JsonResponse({"error": "Username already exists"}, status=400)
-        # 创建一个user然后存到数据库user表里
+        # create a new user
         user = User.objects.create(username=username, password=password, role="normal")
 
-        # 注册成功
+        # signup successful
         response = JsonResponse({"message": "User created successfully"})
         response["Access-Control-Allow-Origin"] = (
-            "http://localhost:3000"  # 允许跨域请求
+            "http://localhost:3000"  
         )
-        response["Access-Control-Allow-Credentials"] = True  # 允许携带凭据
+        response["Access-Control-Allow-Credentials"] = True  # alllow cookies
     else:
-        # 如果不是 POST 请求，返回错误消息
         response = JsonResponse({"error": "Invalid request method"}, status=405)
 
     return response
 
 
-# 登录
+# login
 @csrf_exempt
 def login(request):
-    logger.debug("Login request received")  # 打印调试信息
+    logger.debug("Login request received") 
 
     if request.method == "OPTIONS":
-        logger.debug("Handling preflight request")  # 打印调试信息
+        logger.debug("Handling preflight request")  
         response = JsonResponse({"message": "Preflight request handled successfully"})
         response["Access-Control-Allow-Origin"] = "http://localhost:3000"
         response["Access-Control-Allow-Credentials"] = True
@@ -520,7 +519,7 @@ def login(request):
         return response
 
     elif request.method == "POST":
-        logger.debug("Handling POST request")  # 打印调试信息
+        logger.debug("Handling POST request") 
         data = json.loads(request.body)
         username = data.get("username")
         password = data.get("password")
@@ -528,7 +527,7 @@ def login(request):
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
-            logger.error("User does not exist")  # 打印错误信息
+            logger.error("User does not exist") 
             response = JsonResponse({"error": "Username does not exist"}, status=404)
             response["Access-Control-Allow-Origin"] = "http://localhost:3000"
             response["Access-Control-Allow-Credentials"] = True
@@ -537,15 +536,15 @@ def login(request):
         print("输入的密码:", password)
         print("数据库中存储的密码:", user.password)
 
-        # 验证密码是否匹配
+        # check if the password is correct
         if password != user.password:
-            logger.error("Invalid password")  # 打印错误信息
+            logger.error("Invalid password") 
             response = JsonResponse({"error": "Invalid password"}, status=401)
             response["Access-Control-Allow-Origin"] = "http://localhost:3000"
             response["Access-Control-Allow-Credentials"] = True
             return response
 
-        # 假设验证成功，创建 session 并返回成功消息
+        # create a session to store user information
         request.session["user_id"] = user.user_id
         request.session["user_role"] = user.role
         print(request.session["user_role"])
@@ -562,23 +561,23 @@ def login(request):
         return response
 
     else:
-        logger.error("Invalid request method")  # 打印错误信息
+        logger.error("Invalid request method")  
         response = JsonResponse({"error": "Invalid request method"}, status=405)
         return response
 
 
-# 检查用户是否登录
+# check if the user is logged in
 @csrf_exempt
 def check_session(request):
     if "user_id" in request.session and "user_role" in request.session:
-        # 用户已登录，返回用户信息
+        # get user_id and user_role from session
         user_id = request.session["user_id"]
         user_role = request.session["user_role"]
         print(request.session["user_role"])
         # return JsonResponse({'user_id': user_id, 'user_role': user_role})
         try:
             user = User.objects.get(pk=user_id)
-            # 获取用户信息
+            # return user data
             user_data = {
                 "user_id": user.user_id,
                 "username": user.username,
@@ -587,12 +586,13 @@ def check_session(request):
                 "payment_method": user.payment_method,
                 "user_role": user_role,
             }
-            print("User data:", user_data)  # 打印用户信息
+            print("User data:", user_data) 
             return JsonResponse(user_data)
         except User.DoesNotExist:
             return JsonResponse({"error": "User does not exist"}, status=404)
     else:
         return JsonResponse({"error": "Not logged in"}, status=401)
+
     
 @csrf_exempt
 def check_id(request):
@@ -608,40 +608,6 @@ def check_id(request):
             return JsonResponse(user_data)
         except User.DoesNotExist:
             return JsonResponse({"error": "User does not exist"}, status=404)
-    else:
-        return JsonResponse({"error": "Not logged in"}, status=401)
-    
-@csrf_exempt
-def check_id(request):
-    if "user_id" in request.session and "user_role" in request.session:
-        user_id = request.session['user_id']
-        print(request.session['user_id']) 
-        try:
-            user = User.objects.get(pk=user_id)
-            user_data = {
-                'user_id': user.user_id,
-            }
-            print("User data:", user_data) 
-            return JsonResponse(user_data)
-        except User.DoesNotExist:
-            return JsonResponse({"error": "User does not exist"}, status=404)
-    else:
-        return JsonResponse({"error": "Not logged in"}, status=401)
-    
-@csrf_exempt
-def check_id(request):
-    if "user_id" in request.session and "user_role" in request.session:
-        user_id = request.session['user_id']
-        print(request.session['user_id']) 
-        try:
-            user = User.objects.get(pk=user_id)
-            user_data = {
-                'user_id': user.user_id,
-            }
-            print("User data:", user_data) 
-            return JsonResponse(user_data)
-        except User.DoesNotExist:
-            return JsonResponse({'error': 'User does not exist'}, status=404)
     else:
         return JsonResponse({"error": "Not logged in"}, status=401)
 
@@ -935,7 +901,7 @@ def fetch_transactions(request):
         return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
-# 用户个人资料
+# personal profile
 @csrf_exempt
 def profile(request):
     if request.method == "PUT":
@@ -946,11 +912,11 @@ def profile(request):
         user_id = request.session["user_id"]
 
         try:
-            user = User.objects.get(pk=user_id)  # 根据用户 ID 获取 User 对象
+            user = User.objects.get(pk=user_id)  # find the user according to the user_id
         except User.DoesNotExist:
             return JsonResponse({"error": "User does not exist"}, status=404)
 
-        # 更新用户个人资料
+        # update the user profile
         user.username = data.get("username", user.username)
         # user.avatar = data.get("avatar", user.avatar)
         user.password = data.get("password", user.password)
@@ -971,11 +937,11 @@ def logout_view(request):
     return JsonResponse({"message": "Logout successful"})
 
 
-# 展示用户发布过的posts
+# user listings
 @csrf_exempt
 def user_listings(request):
     if request.method == "GET":
-        user_id = request.session.get("user_id")  # 获取当前用户的 ID
+        user_id = request.session.get("user_id")  # get user_id from session
         print(user_id)
         if user_id:
             cursor = connection.cursor()
@@ -1028,12 +994,10 @@ def user_listings(request):
             finally:
                 cursor.close()
         else:
-            # 如果用户未登录，返回未登录错误
             return JsonResponse(
                 {"status": "error", "message": "User not logged in"}, status=401
             )
     else:
-        # 如果请求方法不是 GET，返回请求方法错误
         return JsonResponse(
             {"status": "error", "message": "Invalid request method"}, status=405
         )
@@ -1043,7 +1007,7 @@ def user_listings(request):
 def other_profile(request, username):
     print("Received username:", username)
     if request.method == "GET":
-        # 根据传入的用户名查找对应的用户ID
+        # find the user according to the username
         cursor = connection.cursor()
         try:
             print("Fetching profile for user:", username)
@@ -1125,7 +1089,6 @@ def send_message(request):
     receiver_id = data.get('receiver_id')
     sender_id = data.get('user_id')
 
-    # 打印获取到的数据，以便调试
     print('Description:', description)
     print('Receiver ID:', receiver_id)
     print('Sender ID:', sender_id)
@@ -1139,7 +1102,6 @@ def send_message(request):
                     [sender_id, receiver_id, description, timestamp],
                 )
 
-    # 返回成功消息
     return JsonResponse({'message': 'Message sent successfully'})
 
 
