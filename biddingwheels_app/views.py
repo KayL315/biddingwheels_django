@@ -92,6 +92,8 @@ def all_listings(request):
             cl.highestBidHolder, cl.image
         FROM 
             CarListing cl
+        WHERE
+            cl.biddingDeadline > NOW()
     """
     )
 
@@ -218,7 +220,6 @@ def detail_page(request, listid):
         cursor.close()
 
 
-@csrf_exempt
 @csrf_exempt
 def fetch_payment_info(request):
     if request.method == "POST":
@@ -383,15 +384,44 @@ def submit_bid(request):
         data = json.loads(request.body)
         bid = float(data.get("bid"))
         listing_id = data.get("listing_id")
-        user_id = request.session.get("user_id")
+        user_id = data.get("user_id")  # buyer_id
+        owner_id = data.get("owner_id")
+        payment_id = data.get("payment_id")
+        address_id = data.get("address_id")
 
         with connection.cursor() as cursor:
             # Fetch the current highest bid
             cursor.execute(
-                "SELECT highestBid FROM CarListing WHERE listid = %s", [listing_id]
+                "SELECT highestBid FROM CarListing WHERE listid = {listing_id}"
             )
             row = cursor.fetchone()
             if row:
+                # add this record to the Transactions table
+                # check if the user had bid before
+                cursor.execute(
+                    f"SELECT * FROM Transactions WHERE buyer_id = {user_id} AND list_id = {listing_id}"
+                )
+                bidhistory = cursor.fetchone()
+                if bidhistory:
+                    # update the bid amount and date
+                    cursor.execute(
+                        "UPDATE Transactions SET amount = %s, date = %s WHERE buyer_id = %s AND list_id = %s",
+                        [bid, datetime.now(), user_id, listing_id],
+                    )
+                else:
+                    query = """ INSERT INTO Transactions (owner_id, buyer_id, list_id, amount, date, payment_id, address_id, done) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+                    params = (
+                        owner_id,
+                        user_id,
+                        listing_id,
+                        bid,
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        payment_id,
+                        address_id,
+                        0,
+                    )
+                    cursor.execute(query, params)
+
                 current_highest_bid = row[0]
                 if bid > current_highest_bid:
                     # Update the bid
@@ -594,22 +624,24 @@ def check_session(request):
         return JsonResponse({"error": "Not logged in"}, status=401)
 
     
+
 @csrf_exempt
 def check_id(request):
     if "user_id" in request.session and "user_role" in request.session:
-        user_id = request.session['user_id']
-        print(request.session['user_id']) 
+        user_id = request.session["user_id"]
+        print(request.session["user_id"])
         try:
             user = User.objects.get(pk=user_id)
             user_data = {
-                'user_id': user.user_id,
+                "user_id": user.user_id,
             }
-            print("User data:", user_data) 
+            print("User data:", user_data)
             return JsonResponse(user_data)
         except User.DoesNotExist:
             return JsonResponse({"error": "User does not exist"}, status=404)
     else:
         return JsonResponse({"error": "Not logged in"}, status=401)
+
 
 # card info
 @csrf_exempt
@@ -756,84 +788,47 @@ def fecth_table_data(request, tablename):
     return JsonResponse(rows, safe=False)
 
 
-def add_fake_data(request):
-    # add fake data to the Transactions table
-    cursor = connection.cursor()
-
-    cursor.execute(
-        """
-            INSERT INTO Payment (user_id, cardName, cardNumber, expMonth, expYear, cvv) 
-            VALUES (1, 'John Doe', '123456789', '12', '2023', '123'),
-                    (2, 'Jane Bob', '987654321', '11', '2022', '456'),
-                    (3, 'John Doe', '123456789', '12', '2023', '123'),
-                    (4, 'Jane Bob', '987654321', '11', '2022', '456'),
-                    (5, 'John Doe', '123456789', '12', '2023', '123')
-        """,
-    )
-
-    cursor.execute(
-        """
-            INSERT INTO Address (user_id, fullName, address, city, state, zip, email) 
-            VALUES  (1, "user1", '123 Main St', 'New York', 'NY', '10001', 'john.doe@gmail.com'),
-                    (2, "user2", '456 Elm St', 'Los Angeles', 'CA', '90001', 'john.bob@gmail.com'),
-                    (3, "user3", '123 Main St', 'New York', 'NY', '10001', 'user3@gmail.com'),
-                    (4, "user4", '456 Elm St', 'Los Angeles', 'CA', '90001', 'user4@gmail.com'),
-                    (5, "user5", '123 Main St', 'New York', 'NY', '10001', 'user4@gmail.com')
-        """,
-    )
-
-    # add fake data to the Transactions table, make sure the date is precise to the second
-    cursor.execute(
-        """
-        INSERT INTO Transactions (owner_id, buyer_id, list_id, amount, date, payment_id, address_id)
-        VALUES  (1, 3, 1, 5000.00, '2021-03-01 12:00:00',  3, 3),
-                (2, 5, 2, 16000.00, '2021-03-06 12:00:00', 5, 5)
-    """
-    )
-    return JsonResponse({"message": "Fake data added successfully"}, status=200)
-
-
 def create_transaction_tables(request):
     cursor = connection.cursor()
     # # start a transaction
     # cursor.execute("START TRANSACTION")
-    cursor.execute("DROP TABLE IF EXISTS Transactions")
-    cursor.execute("DROP TABLE IF EXISTS Payment")
+    # cursor.execute("DROP TABLE IF EXISTS Payment")
     cursor.execute("DROP TABLE IF EXISTS Shipping")
-    cursor.execute("DROP TABLE IF EXISTS Address")
+    # cursor.execute("DROP TABLE IF EXISTS Address")
+    cursor.execute("DROP TABLE IF EXISTS Transactions")
 
-    cursor.execute(
-        """
-        CREATE TABLE Payment (
-            payment_id INT PRIMARY KEY AUTO_INCREMENT,
-            user_id INT,
-            cardName VARCHAR(255) NOT NULL,
-            cardNumber VARCHAR(255) NOT NULL,
-            expMonth VARCHAR(255) NOT NULL,
-            expYear VARCHAR(255) NOT NULL,
-            cvv VARCHAR(255) NOT NULL,
+    # cursor.execute(
+    #     """
+    #     CREATE TABLE Payment (
+    #         payment_id INT PRIMARY KEY AUTO_INCREMENT,
+    #         user_id INT,
+    #         cardName VARCHAR(255) NOT NULL,
+    #         cardNumber VARCHAR(255) NOT NULL,
+    #         expMonth VARCHAR(255) NOT NULL,
+    #         expYear VARCHAR(255) NOT NULL,
+    #         cvv VARCHAR(255) NOT NULL,
 
-            FOREIGN KEY (user_id) REFERENCES user(user_id)
-        )
-    """
-    )
+    #         FOREIGN KEY (user_id) REFERENCES user(user_id)
+    #     )
+    # """
+    # )
 
-    cursor.execute(
-        """
-        CREATE TABLE Address (
-            address_id INT PRIMARY KEY AUTO_INCREMENT,
-            user_id INT,
-            fullName VARCHAR(255) NOT NULL,
-            address VARCHAR(255) NOT NULL,
-            city VARCHAR(255) NOT NULL,
-            state VARCHAR(255) NOT NULL,
-            zip VARCHAR(255) NOT NULL,
-            email VARCHAR(255) NOT NULL,
+    # cursor.execute(
+    #     """
+    #     CREATE TABLE Address (
+    #         address_id INT PRIMARY KEY AUTO_INCREMENT,
+    #         user_id INT,
+    #         fullName VARCHAR(255) NOT NULL,
+    #         address VARCHAR(255) NOT NULL,
+    #         city VARCHAR(255) NOT NULL,
+    #         state VARCHAR(255) NOT NULL,
+    #         zip VARCHAR(255) NOT NULL,
+    #         email VARCHAR(255) NOT NULL,
 
-            FOREIGN KEY (user_id) REFERENCES user(user_id)
-        )
-        """
-    )
+    #         FOREIGN KEY (user_id) REFERENCES user(user_id)
+    #     )
+    #     """
+    # )
 
     cursor.execute(
         """
@@ -841,21 +836,37 @@ def create_transaction_tables(request):
             transaction_id INT PRIMARY KEY AUTO_INCREMENT,
             owner_id INT,
             buyer_id INT,
-            list_id INT NOT NULL Unique,
+            list_id INT NOT NULL,
             amount FLOAT NOT NULL,
             date DATE NOT NULL,
             payment_id INT,
             address_id INT,
+            done BOOLEAN NOT NULL DEFAULT 0,
 
             FOREIGN KEY (owner_id) REFERENCES user(user_id),
             FOREIGN KEY (buyer_id) REFERENCES user(user_id),
             FOREIGN KEY (list_id) REFERENCES CarListing(listid),
             FOREIGN KEY (payment_id) REFERENCES Payment(payment_id),
-            FOREIGN KEY (address_id) REFERENCES Address(address_id)
-        )
+            FOREIGN KEY (address_id) REFERENCES Address(address_id))
     """
     )
 
+    cursor.execute(
+        """
+        CREATE TABLE Shipping (
+            shipping_id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT,
+            transaction_id INT,
+            tracking_number VARCHAR(255) NOT NULL,
+            address_id INT,
+            status VARCHAR(255) NOT NULL,
+            date DATE NOT NULL,
+
+            FOREIGN KEY (user_id) REFERENCES user(user_id),
+            FOREIGN KEY (transaction_id) REFERENCES Transactions(transaction_id),
+            FOREIGN KEY (address_id) REFERENCES Address(address_id))
+    """
+    )
     # fecth description of all Transactions table
     cursor.execute("DESCRIBE Transactions")
     rows = cursor.fetchall()
@@ -1085,47 +1096,48 @@ def other_profile(request, username):
 @csrf_exempt
 def send_message(request):
     data = json.loads(request.body)
-    description = data.get('description')
-    receiver_id = data.get('receiver_id')
-    sender_id = data.get('user_id')
+    description = data.get("description")
+    receiver_id = data.get("receiver_id")
+    sender_id = data.get("user_id")
 
     print('Description:', description)
     print('Receiver ID:', receiver_id)
     print('Sender ID:', sender_id)
     timestamp = datetime.now()
     with connection.cursor() as cursor:
-                cursor.execute(
-                    """
+        cursor.execute(
+            """
                     INSERT INTO Message (senderID, receiverID, description, timestamp) 
                     VALUES (%s, %s, %s, %s)
                 """,
-                    [sender_id, receiver_id, description, timestamp],
-                )
+            [sender_id, receiver_id, description, timestamp],
+        )
 
     return JsonResponse({'message': 'Message sent successfully'})
 
 
 @csrf_exempt
 def get_messages(request):
-    if request.method == 'GET':
-        if 'user_id' in request.session:
-            user_id = request.session['user_id']
+    if request.method == "GET":
+        if "user_id" in request.session:
+            user_id = request.session["user_id"]
             messages = Message.objects.filter(receiver_id=user_id)
             messages_data = []
             for message in messages:
                 sender = User.objects.get(pk=message.sender_id_id)
 
                 message_info = {
-                    'description': message.description,
-                    'sender_username': sender.username
+                    "description": message.description,
+                    "sender_username": sender.username,
                 }
                 messages_data.append(message_info)
-            return JsonResponse({'messages': messages_data})
-        
+            return JsonResponse({"messages": messages_data})
+
         else:
-            return JsonResponse({'error': 'User is not logged in'}, status=401)
+            return JsonResponse({"error": "User is not logged in"}, status=401)
     else:
-        return JsonResponse({'error': 'Invalid request method'}, status=405)
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
 
 @csrf_exempt
 def can_rate(request):
@@ -1140,18 +1152,22 @@ def can_rate(request):
             cursor = connection.cursor()
 
             # Determine if a transaction exists in the DB, return 404 if not
-            cursor.execute(f'''
+            cursor.execute(
+                f"""
                 SELECT transaction_id FROM Transactions
                 WHERE owner_id = {owner_id} AND buyer_id = {buyer_id};
-            ''')
+            """
+            )
             transaction_rows = cursor.fetchone()
             if transaction_rows is None:
                 return HttpResponse("Transaction not found", status=404)
 
-            cursor.execute(f'''
+            cursor.execute(
+                f"""
                 SELECT id FROM User_ratings
                 WHERE rater_id = {rater} AND rated_user_id = {rated};
-            ''')
+            """
+            )
             rating_rows = cursor.fetchone()
             if rating_rows is not None:
                 return HttpResponse("Already rated", status=403)
@@ -1172,25 +1188,30 @@ def add_rating(request):
             rating = data.get("rating")
 
             with connection.cursor() as cursor:
-                cursor.execute(f'''
+                cursor.execute(
+                    f"""
                     INSERT INTO User_ratings(rater_id, rated_user_id, rating) 
                     VALUES({rater}, {rated}, {rating});
-                ''')
+                """
+                )
             return HttpResponse(status=200)
         except Exception as e:
             return HttpResponse(e, status=500)
     return HttpResponse("Method not allowed", status=405)
 
+
 @csrf_exempt
 def fetch_rating(request, user_id):
-    if request.method == 'GET':
+    if request.method == "GET":
         try:
             with connection.cursor() as cursor:
-                cursor.execute(f'''
+                cursor.execute(
+                    f"""
                     SELECT rated_user_id, AVG(rating) FROM biddingwheels.
                     User_ratings GROUP BY rated_user_id 
                     HAVING rated_user_id = {user_id};
-                ''')
+                """
+                )
                 rows = cursor.fetchone()
 
                 if rows is not None:
@@ -1202,3 +1223,63 @@ def fetch_rating(request, user_id):
             return HttpResponse(e, status=500)
     else:
         return HttpResponse("Method not allowed", status=405)
+
+
+
+def update_transactions():
+    cursor = connection.cursor()
+    # start SQL transaction
+    cursor.execute("START TRANSACTION")
+    # find all carlist that are out of date
+    cursor.execute(
+        """
+            WITH BidList as (SELECT listid, highestBid, highestBidHolder FROM CarListing WHERE biddingDeadline < NOW() AND isSold = 0)
+            UPDATE Transactions SET done = 1 WHERE list_id in (SELECT listid FROM BidList)
+        """
+    )
+
+    cursor.execute(
+        """
+            WITH BidList as (SELECT listid, highestBid, highestBidHolder FROM CarListing WHERE biddingDeadline < NOW() AND isSold = 0)
+            DELETE FROM Transactions WHERE list_id IN (SELECT listid as list_id FROM BidList) AND buyer_id NOT IN (SELECT highestBidHolder FROM BidList)
+        """
+    )
+
+    # add shipment data
+    cursor.execute(
+        """
+        SELECT t.buyer_id, t.transaction_id, t.address_id 
+    FROM Transactions t
+    inner JOIN CarListing c ON t.list_id = c.listid
+    WHERE c.biddingDeadline > NOW() 
+    AND c.isSold = 0
+    AND t.buyer_id = c.highestBidHolder
+    """
+    )
+
+    transaction = cursor.fetchall()
+
+    if transaction:
+        for row in transaction:
+            cursor.execute(
+                "INSERT INTO Shipping (user_id, transaction_id, tracking_number, address_id, status, date) VALUES (%s, %s, FLOOR(RAND() * 10000000000), %s, 'Pending', NOW()) ",
+                [row[0], row[1], row[2]],
+            )
+
+    # update the status of the carlist to sold if the bidding deadline is passed, suppose we have more than one carlist that are out of date
+    cursor.execute(
+        """
+            WITH BidList as (SELECT listid, highestBid, highestBidHolder FROM CarListing WHERE biddingDeadline < NOW() AND isSold = 0)
+            UPDATE CarListing SET isSold = 1 WHERE listid in (SELECT listid FROM BidList)
+        """
+    )
+
+    # end SQL transaction
+    cursor.execute("Commit")
+
+    print("Updated transactions")
+    return JsonResponse({"message": "success"})
+
+
+
+
