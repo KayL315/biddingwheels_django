@@ -1,0 +1,11 @@
+CREATE TABLE Address (
+  address_id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT,
+  fullName VARCHAR(255) NOT NULL,
+  address VARCHAR(255) NOT NULL,
+  city VARCHAR(255) NOT NULL,
+  state VARCHAR(255) NOT NULL,
+  zip VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES user(user_id)
+)
