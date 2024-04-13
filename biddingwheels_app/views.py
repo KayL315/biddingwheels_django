@@ -392,14 +392,14 @@ def submit_bid(request):
         with connection.cursor() as cursor:
             # Fetch the current highest bid
             cursor.execute(
-                "SELECT highestBid FROM CarListing WHERE listid = {listing_id}"
+                "SELECT highestBid FROM CarListing WHERE listid = %s", [listing_id]
             )
             row = cursor.fetchone()
             if row:
                 # add this record to the Transactions table
                 # check if the user had bid before
                 cursor.execute(
-                    f"SELECT * FROM Transactions WHERE buyer_id = {user_id} AND list_id = {listing_id}"
+                    "SELECT * FROM Transactions WHERE buyer_id = %s AND list_id = %s", [user_id, listing_id]
                 )
                 bidhistory = cursor.fetchone()
                 if bidhistory:
@@ -792,43 +792,43 @@ def create_transaction_tables(request):
     cursor = connection.cursor()
     # # start a transaction
     # cursor.execute("START TRANSACTION")
-    # cursor.execute("DROP TABLE IF EXISTS Payment")
+    cursor.execute("DROP TABLE IF EXISTS Payment")
     cursor.execute("DROP TABLE IF EXISTS Shipping")
-    # cursor.execute("DROP TABLE IF EXISTS Address")
+    cursor.execute("DROP TABLE IF EXISTS Address")
     cursor.execute("DROP TABLE IF EXISTS Transactions")
 
-    # cursor.execute(
-    #     """
-    #     CREATE TABLE Payment (
-    #         payment_id INT PRIMARY KEY AUTO_INCREMENT,
-    #         user_id INT,
-    #         cardName VARCHAR(255) NOT NULL,
-    #         cardNumber VARCHAR(255) NOT NULL,
-    #         expMonth VARCHAR(255) NOT NULL,
-    #         expYear VARCHAR(255) NOT NULL,
-    #         cvv VARCHAR(255) NOT NULL,
+    cursor.execute(
+        """
+        CREATE TABLE Payment (
+            payment_id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT,
+            cardName VARCHAR(255) NOT NULL,
+            cardNumber VARCHAR(255) NOT NULL,
+            expMonth VARCHAR(255) NOT NULL,
+            expYear VARCHAR(255) NOT NULL,
+            cvv VARCHAR(255) NOT NULL,
 
-    #         FOREIGN KEY (user_id) REFERENCES user(user_id)
-    #     )
-    # """
-    # )
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )
+    """
+    )
 
-    # cursor.execute(
-    #     """
-    #     CREATE TABLE Address (
-    #         address_id INT PRIMARY KEY AUTO_INCREMENT,
-    #         user_id INT,
-    #         fullName VARCHAR(255) NOT NULL,
-    #         address VARCHAR(255) NOT NULL,
-    #         city VARCHAR(255) NOT NULL,
-    #         state VARCHAR(255) NOT NULL,
-    #         zip VARCHAR(255) NOT NULL,
-    #         email VARCHAR(255) NOT NULL,
+    cursor.execute(
+        """
+        CREATE TABLE Address (
+            address_id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT,
+            fullName VARCHAR(255) NOT NULL,
+            address VARCHAR(255) NOT NULL,
+            city VARCHAR(255) NOT NULL,
+            state VARCHAR(255) NOT NULL,
+            zip VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
 
-    #         FOREIGN KEY (user_id) REFERENCES user(user_id)
-    #     )
-    #     """
-    # )
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )
+        """
+    )
 
     cursor.execute(
         """
